@@ -1,5 +1,6 @@
 import { WeReadBook, WeReadNote, WeReadBookmark } from "../types";
 import * as CryptoJS from "crypto-js";
+import { storageService } from "./storage";
 
 // 微信读书API基础URL
 const WEREAD_URL = "https://weread.qq.com/";
@@ -12,6 +13,21 @@ const WEREAD_REVIEW_LIST_URL = `${API_BASE_URL}/review/list`;
 const WEREAD_BOOK_INFO = `${API_BASE_URL}/book/info`;
 const WEREAD_READDATA_DETAIL = `${API_BASE_URL}/readdata/detail`;
 const WEREAD_HISTORY_URL = `${API_BASE_URL}/readdata/summary?synckey=0`;
+
+// 延迟函数
+const delay = async (ms?: number): Promise<void> => {
+  // 如果没有提供延迟时间，则从存储中获取
+  if (ms === undefined) {
+    const syncSettings = await storageService.getSyncSettings();
+    ms = syncSettings.requestDelay;
+  }
+  
+  // 添加一个小的随机延迟，避免请求过于规律
+  const randomDelay = Math.floor(Math.random() * 100); // 0-200ms的随机延迟
+  const totalDelay = ms + randomDelay;
+  
+  await new Promise((resolve) => setTimeout(resolve, totalDelay));
+};
 
 // 重试函数装饰器
 const retry = async <T>(
@@ -147,11 +163,20 @@ export const wereadService = {
     }
   },
 
-  // 获取书籍列表
-  async getBooks(cookie: string): Promise<WeReadBook[]> {
+  // 获取书籍分类
+  getCategory(categories: any[]): string {
+    if (!categories || !categories.length) return "";
+    const categoryNames = categories.map((category: any) => category.title);
+    return categoryNames.join("|");
+  },
+
+  // 获取我的书架
+  async getBookshelf(cookie: string): Promise<WeReadBook[]> {
     return await retry(async () => {
       try {
-        // 使用正确的API端点获取书架信息
+        // 添加请求延迟
+        await delay();
+        
         const response = await fetch(
           `${API_BASE_URL}/shelf/sync?synckey=0&teenmode=0&album=1&onlyBookid=0`,
           {
@@ -161,6 +186,45 @@ export const wereadService = {
             },
           }
         );
+        if (!response.ok) {
+          const data = await response.json();
+          const errcode = data.errcode || 0;
+          this.handleErrcode(errcode);
+          throw new Error(`Could not get bookshelf: ${JSON.stringify(data)}`);
+        }
+        const data = await response.json();
+        const books = data.books || [];
+        console.log(books);
+
+        books.sort((a: any, b: any) => a.sort - b.sort);
+        return books.map((item: any) => ({
+          bookId: item.bookId,
+          title: item.title,
+          author: item.author,
+          cover: item.cover,
+          category: this.getCategory(item.categories),
+        }));
+      } catch (error) {
+        console.error("获取微信读书书架失败:", error);
+        throw error;
+      }
+    });
+  },
+
+  // 获取书籍列表
+  async getBooks(cookie: string): Promise<WeReadBook[]> {
+    return await retry(async () => {
+      try {
+        // 添加请求延迟
+        await delay();
+        
+        // 使用正确的API端点获取书架信息
+        const response = await fetch(WEREAD_NOTEBOOKS_URL, {
+          method: "GET",
+          headers: {
+            Cookie: cookie,
+          },
+        });
 
         if (!response.ok) {
           const data = await response.json();
@@ -173,12 +237,12 @@ export const wereadService = {
 
         if (!data.books) return [];
 
-        return data.books.map((book: any) => ({
-          bookId: book.bookId,
-          title: book.title,
-          author: book.author,
-          cover: book.cover,
-          category: book.category || "",
+        return data.books.map((item: any) => ({
+          bookId: item.book.bookId,
+          title: item.book.title,
+          author: item.book.author,
+          cover: item.book.cover,
+          category: this.getCategory(item.book.categories),
         }));
       } catch (error) {
         console.error("获取微信读书书籍列表失败:", error);
@@ -191,6 +255,9 @@ export const wereadService = {
   async getNotebookList(cookie: string): Promise<any[]> {
     return await retry(async () => {
       try {
+        // 添加请求延迟
+        await delay();
+        
         const response = await fetch(WEREAD_NOTEBOOKS_URL, {
           method: "GET",
           headers: {
@@ -225,6 +292,9 @@ export const wereadService = {
   ): Promise<WeReadBook | null> {
     return await retry(async () => {
       try {
+        // 添加请求延迟
+        await delay();
+        
         const response = await fetch(`${WEREAD_BOOK_INFO}?bookId=${bookId}`, {
           method: "GET",
           headers: {
@@ -246,7 +316,7 @@ export const wereadService = {
           title: book.title,
           author: book.author,
           cover: book.cover,
-          category: book.category || "",
+          category: this.getCategory(book.categories),
         };
       } catch (error) {
         console.error("获取微信读书书籍详情失败:", error);
@@ -286,6 +356,9 @@ export const wereadService = {
   async getReviewList(cookie: string, bookId: string): Promise<any[]> {
     return await retry(async () => {
       try {
+        // 添加请求延迟
+        await delay();
+        
         const params = new URLSearchParams({
           bookId,
           listType: "11",
@@ -311,7 +384,6 @@ export const wereadService = {
 
         const data = await response.json();
         const reviews = data.reviews || [];
-        console.log(data);
 
         // 处理评论数据
         return reviews
@@ -336,6 +408,9 @@ export const wereadService = {
   ): Promise<Record<string, any>> {
     return await retry(async () => {
       try {
+        // 添加请求延迟
+        await delay();
+        
         const body = {
           bookIds: [bookId],
           synckeys: [0],
@@ -396,6 +471,9 @@ export const wereadService = {
   async getReadInfo(cookie: string, bookId: string): Promise<any> {
     return await retry(async () => {
       try {
+        // 添加请求延迟
+        await delay();
+        
         const params = new URLSearchParams({
           noteCount: "1",
           readingDetail: "1",
@@ -442,6 +520,9 @@ export const wereadService = {
   // 获取历史数据
   async getApiData(cookie: string): Promise<any> {
     try {
+      // 添加请求延迟
+      await delay();
+      
       const response = await fetch(WEREAD_HISTORY_URL, {
         method: "GET",
         headers: {
@@ -470,6 +551,9 @@ export const wereadService = {
   ): Promise<WeReadBookmark[]> {
     return await retry(async () => {
       try {
+        // 添加请求延迟
+        await delay();
+        
         const response = await fetch(
           `${WEREAD_BOOKMARKLIST_URL}?bookId=${bookId}`,
           {
@@ -490,7 +574,6 @@ export const wereadService = {
         }
 
         const data = await response.json();
-        console.log(data);
 
         if (!data.updated || !data.updated.length) return [];
 
@@ -512,7 +595,8 @@ export const wereadService = {
   // 获取最近的笔记和划线
   async getRecentNotes(
     cookie: string,
-    syncRange: "last7days" | "last14days" | "last30days" | "all"
+    syncRange: "last1days" | "last7days" | "last14days" | "last30days" | "all",
+    lastSyncTime?: number
   ): Promise<{ notes: WeReadNote[]; bookmarks: WeReadBookmark[] }> {
     try {
       // 获取所有书籍
@@ -531,7 +615,12 @@ export const wereadService = {
       // 获取每本书的笔记和划线
       for (const book of books) {
         console.log(`处理书籍: ${book.title} (${book.bookId})`);
+        
         const notes = await this.getNotes(cookie, book.bookId);
+        
+        // 在获取笔记和划线之间添加额外延迟
+        await delay(500);
+        
         const bookmarks = await this.getBookmarks(cookie, book.bookId);
 
         console.log(
@@ -542,12 +631,36 @@ export const wereadService = {
         allBookmarks.push(...bookmarks);
       }
 
-      // 根据同步范围过滤
-      if (syncRange !== "all") {
+      // 根据同步范围或上次同步时间过滤
+      if (lastSyncTime && lastSyncTime > 0) {
+        // 如果有上次同步时间，优先使用增量同步
+        console.log(
+          `使用增量同步，上次同步时间: ${new Date(
+            lastSyncTime
+          ).toLocaleString()}`
+        );
+
+        // 微信读书时间戳是秒级别的，需要转换为毫秒进行比较
+        const filteredNotes = allNotes.filter(
+          (note) => note.createTime * 1000 > lastSyncTime
+        );
+        const filteredBookmarks = allBookmarks.filter(
+          (bookmark) => bookmark.createTime * 1000 > lastSyncTime
+        );
+
+        console.log(
+          `增量同步找到 ${filteredNotes.length} 条笔记和 ${filteredBookmarks.length} 条划线`
+        );
+        return { notes: filteredNotes, bookmarks: filteredBookmarks };
+      } else if (syncRange !== "all") {
+        // 如果没有上次同步时间，使用同步范围过滤
         const now = Date.now();
         let timeRange: number;
 
         switch (syncRange) {
+          case "last1days":
+            timeRange = 1 * 24 * 60 * 60 * 1000;
+            break;
           case "last7days":
             timeRange = 7 * 24 * 60 * 60 * 1000;
             break;
@@ -559,7 +672,7 @@ export const wereadService = {
             break;
         }
 
-        // 微信阅读时间戳是秒级别的，需要转换为毫秒
+        // 微信读书时间戳是秒级别的，需要转换为毫秒
         const filteredNotes = allNotes.filter(
           (note) => now - note.createTime * 1000 <= timeRange
         );

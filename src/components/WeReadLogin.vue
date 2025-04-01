@@ -3,6 +3,7 @@
   import { Icon } from "@iconify/vue";
   import { storageService } from "../services/storage";
   import { wereadService } from "../services/weread";
+  import { browser } from "#imports";
 
   const isLoggedIn = ref(false);
   const isLoading = ref(false);
@@ -56,7 +57,7 @@
 
       // 构建Cookie字符串
       const cookieStr = cookies
-        .map((cookie) => `${cookie.name}=${cookie.value}`)
+        .map((cookie: any) => `${cookie.name}=${cookie.value}`)
         .join("; ");
 
       // 验证Cookie是否有效
@@ -127,7 +128,7 @@
       </div>
 
       <div v-else class="mt-4">
-        <div v-if="errorMessage" class="alert alert-error mb-4">
+        <div v-if="errorMessage" class="alert alert-error alert-soft mb-4">
           <Icon icon="mdi:alert-circle" class="mr-1" />
           {{ errorMessage }}
         </div>

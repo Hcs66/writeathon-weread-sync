@@ -4,6 +4,7 @@
   import { storageService } from "../services/storage";
   import { writeathonService } from "../services/writeathon";
   import { WriteathonSettings } from "../types";
+  import { browser } from "#imports";
 
   const settings = ref<WriteathonSettings>({
     apiToken: "",
@@ -40,14 +41,18 @@
 
   // 保存设置
   const saveSettings = async () => {
+    //临时保存
+    if (settings.value.userId || settings.value.apiToken)
+      await storageService.saveWriteathonSettings(settings.value);
+
     // 验证输入
-    if (!settings.value.apiToken) {
-      errorMessage.value = "请输入API Token";
+    if (!settings.value.userId) {
+      errorMessage.value = "请输入用户ID";
       return;
     }
 
-    if (!settings.value.userId) {
-      errorMessage.value = "请输入用户ID";
+    if (!settings.value.apiToken) {
+      errorMessage.value = "请输入API Token";
       return;
     }
 
@@ -123,12 +128,12 @@
       </div>
 
       <div v-else class="mt-4">
-        <div v-if="errorMessage" class="alert alert-error mb-4">
+        <div v-if="errorMessage" class="alert alert-error alert-soft mb-4">
           <Icon icon="mdi:alert-circle" class="mr-1" />
           {{ errorMessage }}
         </div>
 
-        <div v-if="successMessage" class="alert alert-success mb-4">
+        <div v-if="successMessage" class="alert alert-success alert-soft mb-4">
           <Icon icon="mdi:check-circle" class="mr-1" />
           {{ successMessage }}
         </div>

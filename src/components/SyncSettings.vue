@@ -9,6 +9,7 @@
     syncInterval: 60,
     mergeNotes: true,
     autoSync: false,
+    requestDelay: 500,
   });
 
   const isLoading = ref(false);
@@ -18,6 +19,7 @@
 
   // 同步范围选项
   const syncRangeOptions = [
+    { value: "last1days", label: "最近1天" },
     { value: "last7days", label: "最近7天" },
     { value: "last14days", label: "最近14天" },
     { value: "last30days", label: "最近30天" },
@@ -32,6 +34,15 @@
     { value: 360, label: "6小时" },
     { value: 720, label: "12小时" },
     { value: 1440, label: "24小时" },
+  ];
+
+  // 请求延迟选项
+  const requestDelayOptions = [
+    { value: 500, label: "0.5秒" },
+    { value: 1000, label: "1秒" },
+    { value: 2000, label: "2秒" },
+    { value: 3000, label: "3秒" },
+    { value: 5000, label: "5秒" },
   ];
 
   // 加载设置
@@ -82,12 +93,12 @@
       </div>
 
       <div v-else class="mt-4">
-        <div v-if="errorMessage" class="alert alert-error mb-4">
+        <div v-if="errorMessage" class="alert alert-error alert-soft mb-4">
           <Icon icon="mdi:alert-circle" class="mr-1" />
           {{ errorMessage }}
         </div>
 
-        <div v-if="successMessage" class="alert alert-success mb-4">
+        <div v-if="successMessage" class="alert alert-success alert-soft mb-4">
           <Icon icon="mdi:check-circle" class="mr-1" />
           {{ successMessage }}
         </div>
@@ -149,6 +160,27 @@
             <span class="label-text font-bold">启用自动同步</span>
           </label>
         </div>
+
+        <!-- <div class="form-control mb-4">
+          <label class="label">
+            <span class="label-text font-bold">请求延迟时间</span>
+            <span class="label-text-alt text-xs text-gray-500"
+              >避免短时间内发送大量请求</span
+            >
+          </label>
+          <select
+            v-model="settings.requestDelay"
+            class="select select-bordered w-full"
+          >
+            <option
+              v-for="option in requestDelayOptions"
+              :key="option.value"
+              :value="option.value"
+            >
+              {{ option.label }}
+            </option>
+          </select>
+        </div> -->
 
         <button
           @click="saveSettings"

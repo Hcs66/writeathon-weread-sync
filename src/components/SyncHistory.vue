@@ -38,8 +38,12 @@
     successMessage.value = "";
 
     try {
+      // 清除同步历史
       await storageService.clearSyncHistory();
+      // 清除已同步书籍ID
       await storageService.clearSyncedBookIds();
+      // 重置最后同步时间
+      await storageService.resetLastSyncTime();
       histories.value = [];
       successMessage.value = "同步历史已清除";
     } catch (error) {
@@ -130,7 +134,7 @@
           <div
             v-for="history in paginatedHistories"
             :key="history.id"
-            class="border-neutral/10 border rounded-md p-3 hover:bg-gray-50"
+            class="border-neutral/10 border rounded-lg p-3 hover:bg-gray-50"
           >
             <div class="flex items-center justify-between mb-2">
               <span class="text-sm text-gray-600">{{
@@ -184,6 +188,11 @@
             >
               <Icon icon="mdi:chevron-right" />
             </button>
+          </div>
+
+          <!-- 历史记录总数信息 -->
+          <div class="text-center text-sm text-gray-500 mt-2">
+            共 {{ histories.length }} 条同步历史记录
           </div>
         </div>
       </div>
