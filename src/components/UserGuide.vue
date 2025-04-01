@@ -1,14 +1,22 @@
 <script setup lang="ts">
   import { Icon } from "@iconify/vue";
+  import { ref } from "vue";
+  import pkg from "../package.json";
+
+  // 从package.json获取版本号
+  const version = ref(pkg.version);
 </script>
 
 <template>
   <div class="card bg-base-100 shadow-xl">
     <div class="card-body">
-      <h2 class="card-title text-primary">
-        <Icon icon="mdi:help-circle" class="mr-2" />
-        使用说明
-      </h2>
+      <div class="flex items-center justify-between">
+        <h2 class="card-title text-primary">
+          <Icon icon="mdi:help-circle" class="mr-2" />
+          使用说明
+        </h2>
+        <span class="text-xs text-gray-500">v{{ version }}</span>
+      </div>
 
       <div class="mt-4 text-sm">
         <div class="collapse collapse-arrow bg-base-200 mb-2">
@@ -42,9 +50,10 @@
           <div class="collapse-title font-medium">3. 同步设置</div>
           <div class="collapse-content">
             <ul class="list-disc pl-5">
-              <li>选择同步范围（最近7天、14天、30天或全部）</li>
+              <li>选择同步范围（最近1天、最近7天、14天、30天或全部）</li>
               <li>选择自动同步间隔（如需自动同步）</li>
               <li>选择是否合并同一本书的笔记和划线</li>
+              <li>设置请求延迟时间（避免短时间内发送大量请求）</li>
               <li>保存设置</li>
             </ul>
           </div>
@@ -64,7 +73,33 @@
 
         <div class="collapse collapse-arrow bg-base-200 mb-2">
           <input type="checkbox" />
-          <div class="collapse-title font-medium">5. 注意事项</div>
+          <div class="collapse-title font-medium">5. 查看和管理已同步书籍</div>
+          <div class="collapse-content">
+            <ul class="list-disc pl-5">
+              <li>点击「已同步书籍」标签页查看所有已同步的书籍</li>
+              <li>可以查看每本书的笔记数量和划线数量</li>
+              <li>点击书名可以直接跳转到微信读书网页版查看该书</li>
+              <li>点击刷新按钮可以更新已同步书籍的数据</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="collapse collapse-arrow bg-base-200 mb-2">
+          <input type="checkbox" />
+          <div class="collapse-title font-medium">6. 从书架同步单本书籍</div>
+          <div class="collapse-content">
+            <ul class="list-disc pl-5">
+              <li>点击「我的书架」标签页查看微信读书书架中的所有书籍</li>
+              <li>已同步的书籍会显示"已同步"标签和笔记、划线数量</li>
+              <li>点击"同步"或"重新同步"按钮可以单独同步该书的笔记和划线</li>
+              <li>同步完成后会显示同步结果提示</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="collapse collapse-arrow bg-base-200 mb-2">
+          <input type="checkbox" />
+          <div class="collapse-title font-medium">7. 注意事项</div>
           <div class="collapse-content">
             <ul class="list-disc pl-5">
               <li>微信读书Cookie有效期约为30天，过期后需要重新获取</li>

@@ -6,11 +6,14 @@
   import SyncSettings from "@/components/SyncSettings.vue";
   import SyncAction from "@/components/SyncAction.vue";
   import SyncHistory from "@/components/SyncHistory.vue";
+  import SyncedBooks from "@/components/SyncedBooks.vue";
   import UserGuide from "@/components/UserGuide.vue";
   import logo from "~/assets/icon.png";
+
   // 标签页
   const tabs = [
     { id: "sync", label: "同步", icon: "mdi:sync" },
+    { id: "books", label: "书籍", icon: "mdi:book" },
     { id: "settings", label: "设置", icon: "mdi:cog" },
     { id: "history", label: "历史", icon: "mdi:history" },
     { id: "guide", label: "帮助", icon: "mdi:help-circle" },
@@ -51,6 +54,11 @@
           <WriteathonSettings />
           <SyncSettings />
         </div>
+      </div>
+
+      <!-- 书籍标签页 -->
+      <div v-if="activeTab === 'books'">
+        <SyncedBooks />
       </div>
 
       <!-- 历史标签页 -->

@@ -2,12 +2,35 @@ import { v4 as uuidv4 } from "uuid";
 import { storageService } from "./storage";
 import { wereadService } from "./weread";
 import { writeathonService } from "./writeathon";
-import { SyncHistory, WeReadBook, WeReadBookmark, WeReadNote } from "../types";
+import {
+  SyncHistory,
+  SyncProgress,
+  WeReadBook,
+  WeReadBookmark,
+  WeReadNote,
+} from "../types";
+
+// 更新同步进度
+const updateSyncProgress = (progress: SyncProgress) => {
+  // 创建一个新的自定义事件，用于通知同步进度更新
+  const syncProgressEvent = new CustomEvent<SyncProgress>(
+    "sync-progress-update",
+    {
+      detail: progress,
+    }
+  );
+  // 触发事件
+  document.dispatchEvent(syncProgressEvent);
+  // 保存进度到存储
+  storageService.saveSyncProgress(progress);
+};
 
 // 同步服务
 export const syncService = {
-  // 执行同步
-  async sync(): Promise<{ success: boolean; message: string }> {
+  // 同步单本书籍
+  async syncSingleBook(
+    bookId: string
+  ): Promise<{ success: boolean; message: string }> {
     try {
       // 获取设置
       const writeathonSettings = await storageService.getWriteathonSettings();
@@ -34,10 +57,108 @@ export const syncService = {
         return { success: false, message: "Writeathon API Token或用户ID无效" };
       }
 
-      // 获取最近的笔记和划线
+      // 获取书籍详情
+      const book = await wereadService.getBookDetail(
+        wereadCookie.value,
+        bookId
+      );
+      if (!book) {
+        return { success: false, message: "获取书籍详情失败" };
+      }
+
+      // 获取书籍的笔记和划线
+      const notes = await wereadService.getNotes(wereadCookie.value, bookId);
+      const bookmarks = await wereadService.getBookmarks(
+        wereadCookie.value,
+        bookId
+      );
+
+      if (notes.length === 0 && bookmarks.length === 0) {
+        return { success: true, message: "该书籍没有笔记和划线" };
+      }
+
+      // 同步历史记录
+      const syncHistory: SyncHistory = {
+        id: uuidv4(),
+        timestamp: new Date().toISOString(),
+        notesCount: notes.length,
+        bookmarksCount: bookmarks.length,
+        success: true,
+        message: "",
+      };
+
+      // 同步笔记和划线
+      if (syncSettings.mergeNotes) {
+        // 合并同步笔记和划线
+        await this.syncMergedNotes(book, notes, bookmarks, writeathonSettings);
+      } else {
+        // 分别同步笔记和划线
+        await this.syncSeparateNotes(
+          book,
+          notes,
+          bookmarks,
+          writeathonSettings
+        );
+      }
+
+      // 更新同步历史
+      syncHistory.message = `成功同步《${book.title}》的 ${notes.length} 条笔记和 ${bookmarks.length} 条划线`;
+      await storageService.saveSyncHistory(syncHistory);
+
+      return {
+        success: true,
+        message: syncHistory.message,
+      };
+    } catch (error: any) {
+      console.error("同步单本书籍失败:", error);
+      return {
+        success: false,
+        message: `同步失败: ${error.message || "未知错误"}`,
+      };
+    }
+  },
+  // 执行同步
+  async sync(): Promise<{ success: boolean; message: string }> {
+    try {
+      // 初始化同步进度
+      await storageService.clearSyncProgress();
+      updateSyncProgress({
+        currentBook: 0,
+        totalBooks: 0,
+        currentBookTitle: "",
+        isCompleted: false,
+      });
+
+      // 获取设置
+      const writeathonSettings = await storageService.getWriteathonSettings();
+      const syncSettings = await storageService.getSyncSettings();
+      const wereadCookie = await storageService.getWeReadCookie();
+
+      // 检查设置是否完整
+      if (!writeathonSettings.apiToken || !writeathonSettings.userId) {
+        return {
+          success: false,
+          message: "请先设置Writeathon API Token和用户ID",
+        };
+      }
+
+      if (!wereadCookie) {
+        return { success: false, message: "请先登录微信读书" };
+      }
+
+      // 验证Writeathon凭证
+      const isValidCredentials = await writeathonService.validateCredentials(
+        writeathonSettings
+      );
+      if (!isValidCredentials) {
+        return { success: false, message: "Writeathon API Token或用户ID无效" };
+      }
+
+      // 获取最近的笔记和划线（使用上次同步时间进行增量同步）
       const { notes, bookmarks } = await wereadService.getRecentNotes(
-        wereadCookie,
-        syncSettings.syncRange
+        wereadCookie.value,
+        syncSettings.syncRange,
+        syncSettings.lastSyncTime
       );
 
       if (notes.length === 0 && bookmarks.length === 0) {
@@ -45,9 +166,17 @@ export const syncService = {
       }
 
       // 获取所有书籍信息
-      const books = await wereadService.getBooks(wereadCookie);
+      const books = await wereadService.getBooks(wereadCookie.value);
       const booksMap = new Map<string, WeReadBook>();
       books.forEach((book) => booksMap.set(book.bookId, book));
+
+      // 更新总书籍数量
+      updateSyncProgress({
+        currentBook: 0,
+        totalBooks: booksMap.size,
+        currentBookTitle: "",
+        isCompleted: false,
+      });
 
       // 同步历史记录
       const syncHistory: SyncHistory = {
@@ -68,6 +197,14 @@ export const syncService = {
         syncSettings.mergeNotes
       );
 
+      // 更新同步进度为完成
+      updateSyncProgress({
+        currentBook: booksMap.size,
+        totalBooks: booksMap.size,
+        currentBookTitle: "",
+        isCompleted: true,
+      });
+
       // 更新同步历史
       syncHistory.success = syncResults.success;
       syncHistory.message = syncResults.message;
@@ -75,11 +212,15 @@ export const syncService = {
       // 保存同步历史
       await storageService.saveSyncHistory(syncHistory);
 
+      // 更新上次同步时间
+      syncSettings.lastSyncTime = Date.now();
+      await storageService.saveSyncSettings(syncSettings);
+
       return {
         success: syncResults.success,
         message: syncResults.message,
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error("同步失败:", error);
       return {
         success: false,
@@ -112,7 +253,7 @@ export const syncService = {
           bookNotesMap.set(note.bookId, { book, notes: [], bookmarks: [] });
         }
 
-        bookNotesMap.get(note.bookId).notes.push(note);
+        bookNotesMap.get(note.bookId)?.notes.push(note);
       }
 
       // 处理划线
@@ -124,11 +265,23 @@ export const syncService = {
           bookNotesMap.set(bookmark.bookId, { book, notes: [], bookmarks: [] });
         }
 
-        bookNotesMap.get(bookmark.bookId).bookmarks.push(bookmark);
+        bookNotesMap.get(bookmark.bookId)?.bookmarks.push(bookmark);
       }
 
       // 同步到Writeathon
+      let currentBookIndex = 0;
+      const totalBooks = bookNotesMap.size;
+
       for (const [_, { book, notes, bookmarks }] of bookNotesMap.entries()) {
+        // 更新当前同步进度
+        currentBookIndex++;
+        updateSyncProgress({
+          currentBook: currentBookIndex,
+          totalBooks: totalBooks,
+          currentBookTitle: book.title,
+          isCompleted: false,
+        });
+
         if (mergeNotes) {
           // 合并同一本书的笔记和划线
           await this.syncMergedNotes(
@@ -152,7 +305,7 @@ export const syncService = {
         success: true,
         message: `同步完成，共同步了 ${notes.length} 条笔记和 ${bookmarks.length} 条划线`,
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error("处理笔记和划线失败:", error);
       return {
         success: false,
@@ -181,11 +334,14 @@ export const syncService = {
 
     if (isFirstSync) {
       // 首次同步：添加标签和书籍链接
+      content += `#微信读书 #微信读书/笔记 #微信读书/划线 `;
       if (book.category) {
         content += `#${book.category} `;
       }
       content += `#${book.title} \n\n`;
-      content += `[${book.title}](${wereadService.getUrl(book.bookId)})\n\n`;
+      content += `微信读书：[${book.title}](${wereadService.getUrl(
+        book.bookId
+      )})\n\n`;
     } else {
       // 非首次同步：添加创建日期
       const currentDate = new Date().toISOString().split("T")[0];
@@ -210,16 +366,8 @@ export const syncService = {
       });
     }
 
-    // 非首次同步：在内容末尾添加分隔符
-    if (!isFirstSync) {
-      content += "\n\n---\n\n";
-    } else {
-      // 首次同步：添加标签
-      content += `\n#${book.title} `;
-      if (book.category) {
-        content += `#${book.category} `;
-      }
-    }
+    // 在内容末尾添加分隔符
+    content += "\n\n---\n\n";
 
     // 同步到Writeathon
     await writeathonService.createCard(writeathonSettings, title, content);
@@ -251,11 +399,12 @@ export const syncService = {
 
       if (isFirstSync) {
         // 首次同步：添加标签和书籍链接
+        content += `#微信读书 #微信读书/笔记 `;
         if (book.category) {
           content += `#${book.category} `;
         }
         content += `#${book.title} \n\n`;
-        content += `微信阅读：[${book.title}](${wereadService.getUrl(
+        content += `微信读书：[${book.title}](${wereadService.getUrl(
           book.bookId
         )})\n\n`;
       }
@@ -278,11 +427,12 @@ export const syncService = {
 
       if (isFirstSync) {
         // 首次同步：添加标签和书籍链接
+        content += `#微信读书 #微信读书/划线 `;
         if (book.category) {
           content += `#${book.category} `;
         }
         content += `#${book.title} \n\n`;
-        content += `微信阅读：[${book.title}](${wereadService.getUrl(
+        content += `微信读书：[${book.title}](${wereadService.getUrl(
           book.bookId
         )})\n\n`;
       }

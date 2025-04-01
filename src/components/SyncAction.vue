@@ -1,19 +1,48 @@
 <script setup lang="ts">
-  import { ref } from "vue";
+  import { ref, onMounted, onUnmounted } from "vue";
   import { Icon } from "@iconify/vue";
   import { syncService } from "../services/sync";
   import { storageService } from "../services/storage";
+  import { SyncProgress } from "../types";
 
   const isSyncing = ref(false);
   const errorMessage = ref("");
   const successMessage = ref("");
   const lastSyncTime = ref<string | null>(null);
 
+  // 同步进度
+  const syncProgress = ref<SyncProgress | null>(null);
+  const showProgress = ref(false);
+
+  // 同步进度更新处理函数
+  const handleSyncProgressUpdate = (event: CustomEvent<SyncProgress>) => {
+    syncProgress.value = event.detail;
+    showProgress.value = true;
+  };
+
+  // 监听同步进度更新事件
+  onMounted(() => {
+    document.addEventListener(
+      "sync-progress-update",
+      handleSyncProgressUpdate as EventListener
+    );
+  });
+
+  // 移除事件监听
+  onUnmounted(() => {
+    document.removeEventListener(
+      "sync-progress-update",
+      handleSyncProgressUpdate as EventListener
+    );
+  });
+
   // 执行同步
   const sync = async () => {
     isSyncing.value = true;
     errorMessage.value = "";
     successMessage.value = "";
+    showProgress.value = false;
+    syncProgress.value = null;
 
     try {
       // 检查设置是否完整
@@ -39,7 +68,12 @@
       } else {
         errorMessage.value = result.message;
       }
-    } catch (error) {
+
+      // 同步完成后隐藏进度条
+      setTimeout(() => {
+        showProgress.value = false;
+      }, 1000);
+    } catch (error: any) {
       console.error("同步失败:", error);
       errorMessage.value = `同步失败: ${error.message || "未知错误"}`;
     } finally {
@@ -72,12 +106,12 @@
       </h2>
 
       <div class="mt-4">
-        <div v-if="errorMessage" class="alert alert-error mb-4">
+        <div v-if="errorMessage" class="alert alert-error alert-soft mb-4">
           <Icon icon="mdi:alert-circle" class="mr-1" />
           {{ errorMessage }}
         </div>
 
-        <div v-if="successMessage" class="alert alert-success mb-4">
+        <div v-if="successMessage" class="alert alert-success alert-soft mb-4">
           <Icon icon="mdi:check-circle" class="mr-1" />
           {{ successMessage }}
         </div>
@@ -88,6 +122,25 @@
         >
           <Icon icon="mdi:clock-outline" class="mr-1" />
           上次同步时间: {{ lastSyncTime }}
+        </div>
+
+        <!-- 同步进度显示 -->
+        <div v-if="showProgress && syncProgress" class="mb-4">
+          <div class="flex flex-col text-sm mb-1">
+            <span
+              >同步进度: {{ syncProgress.currentBook }}/{{
+                syncProgress.totalBooks
+              }}</span
+            >
+            <span v-if="syncProgress.currentBookTitle"
+              >当前: 《{{ syncProgress.currentBookTitle }}》</span
+            >
+          </div>
+          <progress
+            class="progress progress-primary w-full"
+            :value="syncProgress.currentBook"
+            :max="syncProgress.totalBooks"
+          ></progress>
         </div>
 
         <button
