@@ -74,27 +74,10 @@
 
       for (const book of allBooks) {
         if (syncedBookIds.includes(book.bookId)) {
-          // 添加延迟，避免短时间内发送大量请求
-          await new Promise((resolve) => setTimeout(resolve, 100));
-
-          // 获取笔记和划线数量
-          const notes = await wereadService.getNotes(
-            wereadCookie.value,
-            book.bookId
-          );
-
-          // 在获取笔记和划线之间添加额外延迟
-          await new Promise((resolve) => setTimeout(resolve, 100));
-
-          const bookmarks = await wereadService.getBookmarks(
-            wereadCookie.value,
-            book.bookId
-          );
-
           synced.push({
             ...book,
-            notesCount: notes.length,
-            bookmarksCount: bookmarks.length,
+            notesCount: 0,
+            bookmarksCount: 0,
             lastSyncTime: new Date().toISOString().split("T")[0], // 使用当前日期作为最后同步时间
           });
         }
@@ -129,7 +112,6 @@
 
       // 获取书架数据
       const books = await wereadService.getBookshelf(wereadCookie.value);
-
       // 为每本书添加同步状态
       const booksWithSyncStatus: BookshelfBookData[] = [];
 
@@ -139,35 +121,6 @@
           ...book,
           isSynced,
         };
-
-        // 如果已同步，获取笔记和划线数量
-        if (isSynced) {
-          try {
-            // 添加延迟，避免短时间内发送大量请求
-            await new Promise((resolve) => setTimeout(resolve, 100));
-
-            const notes = await wereadService.getNotes(
-              wereadCookie.value,
-              book.bookId
-            );
-
-            // 在获取笔记和划线之间添加额外延迟
-            await new Promise((resolve) => setTimeout(resolve, 100));
-
-            const bookmarks = await wereadService.getBookmarks(
-              wereadCookie.value,
-              book.bookId
-            );
-
-            bookData.notesCount = notes.length;
-            bookData.bookmarksCount = bookmarks.length;
-          } catch (error) {
-            console.error(
-              `获取书籍 ${book.title} 的笔记和划线数量失败:`,
-              error
-            );
-          }
-        }
 
         booksWithSyncStatus.push(bookData);
       }
@@ -227,6 +180,7 @@
   const goToSyncedPage = (page: number) => {
     if (page >= 1 && page <= syncedTotalPages.value) {
       syncedCurrentPage.value = page;
+      document.scrollingElement?.scrollTo(0, 0);
     }
   };
 
@@ -234,6 +188,7 @@
   const goToBookshelfPage = (page: number) => {
     if (page >= 1 && page <= bookshelfTotalPages.value) {
       bookshelfCurrentPage.value = page;
+      document.scrollingElement?.scrollTo(0, 0);
     }
   };
 
@@ -317,11 +272,13 @@
             :key="book.bookId"
             class="card card-side bg-base-200 shadow-md mb-4 border border-neutral/10"
           >
-            <figure class="w-24 min-w-24 h-32 m-2">
+            <figure
+              class="w-24 min-w-24 h-32 m-2 border border-neutral/10 rounded-md"
+            >
               <img
                 :src="bookCover(book.cover)"
                 :alt="book.title"
-                class="h-full w-full rounded-md"
+                class="h-full w-full"
               />
             </figure>
             <div class="card-body p-2">
@@ -335,16 +292,6 @@
                 </a>
               </h3>
               <p class="text-sm opacity-70">作者: {{ book.author }}</p>
-              <div class="flex gap-4">
-                <div class="badge badge-primary badge-xs flex">
-                  <Icon icon="mdi:note-text" />
-                  笔记: {{ book.notesCount }}
-                </div>
-                <div class="badge badge-warning text-white badge-xs flex">
-                  <Icon icon="mdi:bookmark" />
-                  划线: {{ book.bookmarksCount }}
-                </div>
-              </div>
               <div class="text-xs opacity-50" v-if="book.lastSyncTime">
                 最后同步: {{ book.lastSyncTime }}
               </div>
@@ -434,11 +381,13 @@
             :key="book.bookId"
             class="card card-side bg-base-200 shadow-md mb-4 border border-neutral/10"
           >
-            <figure class="w-24 min-w-24 h-32 m-2">
+            <figure
+              class="w-24 min-w-24 h-32 m-2 border border-neutral/10 rounded-md"
+            >
               <img
                 :src="bookCover(book.cover)"
                 :alt="book.title"
-                class="h-full w-full rounded-md"
+                class="h-full w-full"
               />
             </figure>
             <div class="card-body p-2">
@@ -452,39 +401,8 @@
                 </a>
               </h3>
               <p class="text-sm opacity-70">作者: {{ book.author }}</p>
-              <!-- 笔记和划线数量 -->
-              <div
-                class="flex gap-2"
-                v-if="
-                  book.isSynced &&
-                  (book.notesCount !== undefined ||
-                    book.bookmarksCount !== undefined)
-                "
-              >
-                <div
-                  class="badge badge-primary badge-xs flex"
-                  v-if="book.notesCount !== undefined"
-                >
-                  <Icon icon="mdi:note-text" />
-                  笔记: {{ book.notesCount }}
-                </div>
-                <div
-                  class="badge badge-warning text-white badge-xs flex"
-                  v-if="book.bookmarksCount !== undefined"
-                >
-                  <Icon icon="mdi:bookmark" />
-                  划线: {{ book.bookmarksCount }}
-                </div>
-              </div>
               <!-- 同步状态和同步按钮 -->
               <div class="flex justify-between items-center w-full">
-                <div
-                  v-if="book.isSynced"
-                  class="badge badge-success badge-sm text-white flex gap-1"
-                >
-                  <Icon icon="mdi:check-circle" />
-                  已同步
-                </div>
                 <button
                   class="btn btn-primary btn-xs"
                   @click="syncBook(book.bookId)"
@@ -502,36 +420,38 @@
                       : "同步"
                   }}
                 </button>
+                <div
+                  v-if="book.isSynced"
+                  class="badge badge-success badge-sm text-white flex gap-1"
+                >
+                  <Icon icon="mdi:check-circle" />
+                  已同步
+                </div>
               </div>
             </div>
-
-            <!-- 分页控件 -->
-            <div
-              class="flex justify-center mt-4"
-              v-if="bookshelfTotalPages > 1"
-            >
-              <div class="join">
-                <button
-                  class="join-item btn btn-sm"
-                  :class="{ 'btn-disabled': bookshelfCurrentPage === 1 }"
-                  @click="goToBookshelfPage(bookshelfCurrentPage - 1)"
-                >
-                  <Icon icon="mdi:chevron-left" />
-                </button>
-                <button class="join-item btn btn-sm">
-                  {{ bookshelfCurrentPage }} / {{ bookshelfTotalPages }}
-                </button>
-                <button
-                  class="join-item btn btn-sm"
-                  :class="{
-                    'btn-disabled':
-                      bookshelfCurrentPage === bookshelfTotalPages,
-                  }"
-                  @click="goToBookshelfPage(bookshelfCurrentPage + 1)"
-                >
-                  <Icon icon="mdi:chevron-right" />
-                </button>
-              </div>
+          </div>
+          <!-- 分页控件 -->
+          <div class="flex justify-center mt-4" v-if="bookshelfTotalPages > 1">
+            <div class="join">
+              <button
+                class="join-item btn btn-sm"
+                :class="{ 'btn-disabled': bookshelfCurrentPage === 1 }"
+                @click="goToBookshelfPage(bookshelfCurrentPage - 1)"
+              >
+                <Icon icon="mdi:chevron-left" />
+              </button>
+              <button class="join-item btn btn-sm">
+                {{ bookshelfCurrentPage }} / {{ bookshelfTotalPages }}
+              </button>
+              <button
+                class="join-item btn btn-sm"
+                :class="{
+                  'btn-disabled': bookshelfCurrentPage === bookshelfTotalPages,
+                }"
+                @click="goToBookshelfPage(bookshelfCurrentPage + 1)"
+              >
+                <Icon icon="mdi:chevron-right" />
+              </button>
             </div>
           </div>
           <!-- 书籍总数信息 -->

@@ -162,7 +162,7 @@ export const syncService = {
       );
 
       if (notes.length === 0 && bookmarks.length === 0) {
-        return { success: true, message: "没有找到需要同步的笔记和划线" };
+        return { success: true, message: "没有找到需要同步的书籍" };
       }
 
       // 获取所有书籍信息
@@ -314,6 +314,24 @@ export const syncService = {
     }
   },
 
+  filterTitle: (title: string): string => {
+    const maxLength = 50;
+    // 过滤特殊字符
+    title = title.replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s]/g, "");
+    if (title.length <= maxLength) {
+      return title;
+    }
+    const halfLength = Math.floor(maxLength / 2);
+    return title.substring(0, halfLength);
+  },
+
+  // 过滤内容
+  filterContent: (content: string): string => {
+    // 过滤段首空格和缩进
+    content = content.replace(/^[\s\u3000]+/gm, "");
+    return content;
+  },
+
   // 合并同步笔记和划线
   async syncMergedNotes(
     book: WeReadBook,
@@ -334,11 +352,7 @@ export const syncService = {
 
     if (isFirstSync) {
       // 首次同步：添加标签和书籍链接
-      content += `#微信读书 #微信读书/笔记 #微信读书/划线 `;
-      if (book.category) {
-        content += `#${book.category} `;
-      }
-      content += `#${book.title} \n\n`;
+      content += `#微信读书/${this.filterTitle(book.title)} \n\n`;
       content += `微信读书：[${book.title}](${wereadService.getUrl(
         book.bookId
       )})\n\n`;
@@ -352,17 +366,17 @@ export const syncService = {
 
     // 添加笔记
     if (notes.length > 0) {
-      content += "### 笔记\n\n";
       notes.forEach((note) => {
-        content += `> ${note.markText}\n\n${note.content}\n\n---\n\n`;
+        content += `> ${this.filterContent(
+          note.markText
+        )}\n\n${this.filterContent(note.content)}\n\n---\n\n`;
       });
     }
 
     // 添加划线
     if (bookmarks.length > 0) {
-      content += "### 划线\n\n";
       bookmarks.forEach((bookmark) => {
-        content += `> ${bookmark.markText}\n\n`;
+        content += `> ${this.filterContent(bookmark.markText)}\n\n`;
       });
     }
 
@@ -397,21 +411,18 @@ export const syncService = {
 
       let content = "";
 
-      if (isFirstSync) {
-        // 首次同步：添加标签和书籍链接
-        content += `#微信读书 #微信读书/笔记 `;
-        if (book.category) {
-          content += `#${book.category} `;
-        }
-        content += `#${book.title} \n\n`;
-        content += `微信读书：[${book.title}](${wereadService.getUrl(
-          book.bookId
-        )})\n\n`;
-      }
+      //添加标签和书籍链接
+      content += `#微信读书/${this.filterTitle(book.title)} \n\n`;
+      content += `微信读书：[${book.title}](${wereadService.getUrl(
+        book.bookId
+      )})\n\n`;
+
       // 添加创建日期
       content += `### ${currentDate}\n\n`;
 
-      content += `> ${note.markText}\n\n${note.content}\n\n`;
+      content += `> ${this.filterContent(
+        note.markText
+      )}\n\n${this.filterContent(note.content)}\n\n`;
 
       // 在内容末尾添加分隔符
       content += "---\n\n";
@@ -420,28 +431,25 @@ export const syncService = {
     }
 
     // 同步划线
-    if (bookmarks.length > 0) {
-      const title = `${book.title} - 划线集`;
+    for (const bookmark of bookmarks) {
+      const title = `${book.title} - 划线: ${bookmark.markText.substring(
+        0,
+        20
+      )}${bookmark.markText.length > 20 ? "..." : ""}`;
 
+      console.log(title);
+      
       let content = "";
+      // 首次同步：添加标签和书籍链接
+      content += `#微信读书/${this.filterTitle(book.title)} \n\n`;
+      content += `微信读书：[${book.title}](${wereadService.getUrl(
+        book.bookId
+      )})\n\n`;
 
-      if (isFirstSync) {
-        // 首次同步：添加标签和书籍链接
-        content += `#微信读书 #微信读书/划线 `;
-        if (book.category) {
-          content += `#${book.category} `;
-        }
-        content += `#${book.title} \n\n`;
-        content += `微信读书：[${book.title}](${wereadService.getUrl(
-          book.bookId
-        )})\n\n`;
-      }
       // 添加创建日期
       content += `### ${currentDate}\n\n`;
 
-      bookmarks.forEach((bookmark) => {
-        content += `> ${bookmark.markText}\n\n`;
-      });
+      content += `> ${this.filterContent(bookmark.markText)}\n\n`;
 
       // 在内容末尾添加分隔符
       content += "---\n\n";

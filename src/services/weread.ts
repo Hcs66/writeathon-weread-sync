@@ -21,11 +21,9 @@ const delay = async (ms?: number): Promise<void> => {
     const syncSettings = await storageService.getSyncSettings();
     ms = syncSettings.requestDelay;
   }
-  
-  // 添加一个小的随机延迟，避免请求过于规律
-  const randomDelay = Math.floor(Math.random() * 100); // 0-200ms的随机延迟
-  const totalDelay = ms + randomDelay;
-  
+
+  const totalDelay = ms;
+
   await new Promise((resolve) => setTimeout(resolve, totalDelay));
 };
 
@@ -176,7 +174,7 @@ export const wereadService = {
       try {
         // 添加请求延迟
         await delay();
-        
+
         const response = await fetch(
           `${API_BASE_URL}/shelf/sync?synckey=0&teenmode=0&album=1&onlyBookid=0`,
           {
@@ -196,7 +194,7 @@ export const wereadService = {
         const books = data.books || [];
         console.log(books);
 
-        books.sort((a: any, b: any) => a.sort - b.sort);
+        books.sort((a: any, b: any) => b.readUpdateTime - a.readUpdateTime);
         return books.map((item: any) => ({
           bookId: item.bookId,
           title: item.title,
@@ -217,7 +215,7 @@ export const wereadService = {
       try {
         // 添加请求延迟
         await delay();
-        
+
         // 使用正确的API端点获取书架信息
         const response = await fetch(WEREAD_NOTEBOOKS_URL, {
           method: "GET",
@@ -236,7 +234,8 @@ export const wereadService = {
         const data = await response.json();
 
         if (!data.books) return [];
-
+        console.log(data.books);
+        
         return data.books.map((item: any) => ({
           bookId: item.book.bookId,
           title: item.book.title,
@@ -251,40 +250,6 @@ export const wereadService = {
     });
   },
 
-  // 获取笔记本列表
-  async getNotebookList(cookie: string): Promise<any[]> {
-    return await retry(async () => {
-      try {
-        // 添加请求延迟
-        await delay();
-        
-        const response = await fetch(WEREAD_NOTEBOOKS_URL, {
-          method: "GET",
-          headers: {
-            Cookie: cookie,
-          },
-        });
-
-        if (!response.ok) {
-          const data = await response.json();
-          const errcode = data.errcode || 0;
-          this.handleErrcode(errcode);
-          throw new Error(
-            `Could not get notebook list: ${JSON.stringify(data)}`
-          );
-        }
-
-        const data = await response.json();
-        const books = data.books || [];
-        books.sort((a: any, b: any) => a.sort - b.sort);
-        return books;
-      } catch (error) {
-        console.error("获取笔记本列表失败:", error);
-        throw error;
-      }
-    });
-  },
-
   // 获取书籍详情
   async getBookDetail(
     cookie: string,
@@ -294,7 +259,7 @@ export const wereadService = {
       try {
         // 添加请求延迟
         await delay();
-        
+
         const response = await fetch(`${WEREAD_BOOK_INFO}?bookId=${bookId}`, {
           method: "GET",
           headers: {
@@ -358,7 +323,7 @@ export const wereadService = {
       try {
         // 添加请求延迟
         await delay();
-        
+
         const params = new URLSearchParams({
           bookId,
           listType: "11",
@@ -410,7 +375,7 @@ export const wereadService = {
       try {
         // 添加请求延迟
         await delay();
-        
+
         const body = {
           bookIds: [bookId],
           synckeys: [0],
@@ -473,7 +438,7 @@ export const wereadService = {
       try {
         // 添加请求延迟
         await delay();
-        
+
         const params = new URLSearchParams({
           noteCount: "1",
           readingDetail: "1",
@@ -522,7 +487,7 @@ export const wereadService = {
     try {
       // 添加请求延迟
       await delay();
-      
+
       const response = await fetch(WEREAD_HISTORY_URL, {
         method: "GET",
         headers: {
@@ -553,7 +518,7 @@ export const wereadService = {
       try {
         // 添加请求延迟
         await delay();
-        
+
         const response = await fetch(
           `${WEREAD_BOOKMARKLIST_URL}?bookId=${bookId}`,
           {
@@ -615,12 +580,9 @@ export const wereadService = {
       // 获取每本书的笔记和划线
       for (const book of books) {
         console.log(`处理书籍: ${book.title} (${book.bookId})`);
-        
+
         const notes = await this.getNotes(cookie, book.bookId);
-        
-        // 在获取笔记和划线之间添加额外延迟
-        await delay(500);
-        
+
         const bookmarks = await this.getBookmarks(cookie, book.bookId);
 
         console.log(

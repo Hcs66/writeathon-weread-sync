@@ -5,11 +5,11 @@
   import { SyncSettings } from "../types";
 
   const settings = ref<SyncSettings>({
-    syncRange: "last7days",
+    syncRange: "all",
     syncInterval: 60,
     mergeNotes: true,
     autoSync: false,
-    requestDelay: 500,
+    requestDelay: 100,
   });
 
   const isLoading = ref(false);

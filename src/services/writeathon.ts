@@ -7,7 +7,7 @@ const API_BASE_URL = !import.meta.env.DEV
   : "http://localhost:7001"; // 'https://api.writeathon.cn';
 
 // 延迟函数
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Writeathon服务
 export const writeathonService = {
@@ -63,12 +63,10 @@ export const writeathonService = {
     content: string
   ): Promise<boolean> {
     try {
-      // 获取请求延迟设置
-      const syncSettings = await storageService.getSyncSettings();
-      
       // 在发送请求前等待设定的延迟时间
-      await delay(syncSettings.requestDelay);
-      
+      // api接口QPS=30, 335ms = 10QPS, 100ms = 30QPS
+      await delay(140);
+
       const response = await fetch(
         `${API_BASE_URL}/v1/users/${settings.userId}/cards`,
         {

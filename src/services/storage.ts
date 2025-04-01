@@ -2,12 +2,12 @@ import { WriteathonSettings, SyncSettings, SyncHistory, WeReadCookie, SyncProgre
 
 // 默认同步设置
 const DEFAULT_SYNC_SETTINGS: SyncSettings = {
-  syncRange: 'last7days',
+  syncRange: 'all',
   syncInterval: 60, // 默认60分钟
   mergeNotes: false,
   autoSync: false,
   lastSyncTime: 0, // 初始值为0，表示从未同步过
-  requestDelay: 500// 默认500毫秒（500ms）
+  requestDelay: 100, // 默认100毫秒（100ms）
 };
 
 // 存储服务
