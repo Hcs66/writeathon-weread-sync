@@ -137,9 +137,21 @@ export const wereadService = {
     )}`;
   },
 
+  // 访问微信读书首页
+  async visitWeRead(cookie: string) {
+    await fetch(`${WEREAD_URL}`, {
+      method: "GET",
+      headers: {
+        Cookie: cookie,
+      },
+    });
+  },
+
   // 获取用户信息
   async getUserInfo(cookie: string): Promise<any | null> {
     try {
+      await this.visitWeRead(cookie);
+
       const response = await fetch(`${API_BASE_URL}/user/profile`, {
         method: "GET",
         headers: {
@@ -153,8 +165,9 @@ export const wereadService = {
         this.handleErrcode(errcode);
         return null;
       }
+      const data = await response.json();
 
-      return await response.json();
+      return data;
     } catch (error) {
       console.error("获取微信读书用户信息失败:", error);
       return null;
@@ -172,8 +185,8 @@ export const wereadService = {
   async getBookshelf(cookie: string): Promise<WeReadBook[]> {
     return await retry(async () => {
       try {
-        // 添加请求延迟
-        await delay();
+        // 访问微信读书首页
+        await this.visitWeRead(cookie);
 
         const response = await fetch(
           `${API_BASE_URL}/shelf/sync?synckey=0&teenmode=0&album=1&onlyBookid=0`,
@@ -192,7 +205,6 @@ export const wereadService = {
         }
         const data = await response.json();
         const books = data.books || [];
-        console.log(books);
 
         books.sort((a: any, b: any) => b.readUpdateTime - a.readUpdateTime);
         return books.map((item: any) => ({
@@ -213,8 +225,8 @@ export const wereadService = {
   async getBooks(cookie: string): Promise<WeReadBook[]> {
     return await retry(async () => {
       try {
-        // 添加请求延迟
-        await delay();
+        // 访问微信读书首页
+        await this.visitWeRead(cookie);
 
         // 使用正确的API端点获取书架信息
         const response = await fetch(WEREAD_NOTEBOOKS_URL, {
@@ -234,8 +246,7 @@ export const wereadService = {
         const data = await response.json();
 
         if (!data.books) return [];
-        console.log(data.books);
-        
+
         return data.books.map((item: any) => ({
           bookId: item.book.bookId,
           title: item.book.title,
@@ -257,8 +268,8 @@ export const wereadService = {
   ): Promise<WeReadBook | null> {
     return await retry(async () => {
       try {
-        // 添加请求延迟
-        await delay();
+        // 访问微信读书首页
+        await this.visitWeRead(cookie);
 
         const response = await fetch(`${WEREAD_BOOK_INFO}?bookId=${bookId}`, {
           method: "GET",
@@ -294,6 +305,9 @@ export const wereadService = {
   async getNotes(cookie: string, bookId: string): Promise<WeReadNote[]> {
     return await retry(async () => {
       try {
+        // 访问微信读书首页
+        await this.visitWeRead(cookie);
+
         // 获取笔记列表
         const reviews = await this.getReviewList(cookie, bookId);
 
@@ -321,8 +335,8 @@ export const wereadService = {
   async getReviewList(cookie: string, bookId: string): Promise<any[]> {
     return await retry(async () => {
       try {
-        // 添加请求延迟
-        await delay();
+        // 访问微信读书首页
+        await this.visitWeRead(cookie);
 
         const params = new URLSearchParams({
           bookId,
@@ -373,8 +387,8 @@ export const wereadService = {
   ): Promise<Record<string, any>> {
     return await retry(async () => {
       try {
-        // 添加请求延迟
-        await delay();
+        // 访问微信读书首页
+        await this.visitWeRead(cookie);
 
         const body = {
           bookIds: [bookId],
@@ -436,8 +450,9 @@ export const wereadService = {
   async getReadInfo(cookie: string, bookId: string): Promise<any> {
     return await retry(async () => {
       try {
-        // 添加请求延迟
-        await delay();
+
+        // 访问微信读书首页
+        await this.visitWeRead(cookie);
 
         const params = new URLSearchParams({
           noteCount: "1",
@@ -485,8 +500,8 @@ export const wereadService = {
   // 获取历史数据
   async getApiData(cookie: string): Promise<any> {
     try {
-      // 添加请求延迟
-      await delay();
+      // 访问微信读书首页
+      await this.visitWeRead(cookie);
 
       const response = await fetch(WEREAD_HISTORY_URL, {
         method: "GET",
@@ -516,8 +531,8 @@ export const wereadService = {
   ): Promise<WeReadBookmark[]> {
     return await retry(async () => {
       try {
-        // 添加请求延迟
-        await delay();
+        // 访问微信读书首页
+        await this.visitWeRead(cookie);
 
         const response = await fetch(
           `${WEREAD_BOOKMARKLIST_URL}?bookId=${bookId}`,
@@ -579,6 +594,9 @@ export const wereadService = {
 
       // 获取每本书的笔记和划线
       for (const book of books) {
+        // 延迟一段时间，避免请求过于频繁
+        await delay();
+        
         console.log(`处理书籍: ${book.title} (${book.bookId})`);
 
         const notes = await this.getNotes(cookie, book.bookId);

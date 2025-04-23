@@ -57,6 +57,7 @@ export interface SyncProgress {
   totalBooks: number; // 总书籍数量
   currentBookTitle: string; // 当前同步的书籍标题
   isCompleted: boolean; // 是否完成
+  isAutoSync: boolean; // 是否自动同步
 }
 
 // 微信读书Cookie

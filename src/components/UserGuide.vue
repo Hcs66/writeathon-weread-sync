@@ -17,7 +17,15 @@
         </h2>
         <span class="text-xs text-gray-500">v{{ version }}</span>
       </div>
-
+      <div class="mt-4 text-sm pl-4 border-l-4 border-l-primary">
+        提示:
+        写拉松为普通用户提供100张卡片。您可以选择升级写拉松Pro会员，享有不限量卡片存储及更多会员权益（<a
+          class="text-primary underline underline-offset-4 hover:text-primary/90"
+          target="_blank"
+          href="https://www.writeathon.cn/membership"
+          >升级会员</a
+        >）；或者合并一本书的所有划线到一张卡片中以减少卡片数量，可前往设置。
+      </div>
       <div class="mt-4 text-sm">
         <div class="collapse collapse-arrow bg-base-200 mb-2">
           <input type="checkbox" checked />

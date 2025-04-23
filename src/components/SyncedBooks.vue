@@ -162,6 +162,32 @@
     }
   };
 
+  // 增量同步单本书籍
+  const incrementalSyncBook = async (bookId: string) => {
+    syncingBookId.value = bookId;
+    syncResult.value = null;
+
+    try {
+      // 调用同步服务，传入增量同步范围
+      const result = await syncService.syncSingleBook(bookId, true);
+      syncResult.value = result;
+
+      // 如果同步成功，重新加载已同步书籍数据
+      if (result.success && result.count > 0) {
+        await loadBookshelf();
+        loadSyncedBooks();
+      }
+    } catch (error: any) {
+      console.error("增量同步书籍失败:", error);
+      syncResult.value = {
+        success: false,
+        message: `增量同步失败: ${error.message || "未知错误"}`,
+      };
+    } finally {
+      syncingBookId.value = null;
+    }
+  };
+
   // 获取当前页的已同步书籍
   const paginatedSyncedBooks = computed(() => {
     const start = (syncedCurrentPage.value - 1) * pageSize;
@@ -403,23 +429,25 @@
               <p class="text-sm opacity-70">作者: {{ book.author }}</p>
               <!-- 同步状态和同步按钮 -->
               <div class="flex justify-between items-center w-full">
-                <button
-                  class="btn btn-primary btn-xs"
-                  @click="syncBook(book.bookId)"
-                  :disabled="syncingBookId === book.bookId"
-                >
-                  <span
-                    v-if="syncingBookId === book.bookId"
-                    class="loading loading-spinner loading-xs"
-                  ></span>
-                  {{
-                    syncingBookId === book.bookId
-                      ? "同步中..."
-                      : book.isSynced
-                      ? "重新同步"
-                      : "同步"
-                  }}
-                </button>
+                <div class="flex gap-2">
+                  <button
+                    class="btn btn-primary btn-xs"
+                    @click="incrementalSyncBook(book.bookId)"
+                    :disabled="syncingBookId === book.bookId"
+                  >
+                    <span
+                      v-if="syncingBookId === book.bookId"
+                      class="loading loading-spinner loading-xs"
+                    ></span>
+                    {{
+                      syncingBookId === book.bookId
+                        ? "同步中..."
+                        : book.isSynced
+                        ? "重新同步"
+                        : "同步"
+                    }}
+                  </button>
+                </div>
                 <div
                   v-if="book.isSynced"
                   class="badge badge-success badge-sm text-white flex gap-1"

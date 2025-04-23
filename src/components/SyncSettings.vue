@@ -6,8 +6,8 @@
 
   const settings = ref<SyncSettings>({
     syncRange: "all",
-    syncInterval: 60,
-    mergeNotes: true,
+    syncInterval: 15,
+    mergeNotes: false,
     autoSync: false,
     requestDelay: 100,
   });
@@ -28,12 +28,9 @@
 
   // 同步间隔选项
   const syncIntervalOptions = [
+    { value: 15, label: "15分钟" },
     { value: 30, label: "30分钟" },
     { value: 60, label: "1小时" },
-    { value: 120, label: "2小时" },
-    { value: 360, label: "6小时" },
-    { value: 720, label: "12小时" },
-    { value: 1440, label: "24小时" },
   ];
 
   // 请求延迟选项
@@ -121,7 +118,7 @@
           </select>
         </div>
 
-        <div class="form-control mb-4">
+        <!-- <div class="form-control mb-4">
           <label class="label">
             <span class="label-text font-bold">自动同步间隔</span>
           </label>
@@ -137,7 +134,7 @@
               {{ option.label }}
             </option>
           </select>
-        </div>
+        </div> -->
 
         <div class="form-control mb-4">
           <label class="label cursor-pointer justify-start gap-2">
@@ -150,7 +147,7 @@
           </label>
         </div>
 
-        <div class="form-control mb-4">
+        <div class="form-control">
           <label class="label cursor-pointer justify-start gap-2">
             <input
               type="checkbox"
@@ -160,7 +157,9 @@
             <span class="label-text font-bold">启用自动同步</span>
           </label>
         </div>
-
+        <div class="mb-4 text-gray-400">
+          * 启用后每{{ settings.syncInterval }}分钟同步一次
+        </div>
         <!-- <div class="form-control mb-4">
           <label class="label">
             <span class="label-text font-bold">请求延迟时间</span>

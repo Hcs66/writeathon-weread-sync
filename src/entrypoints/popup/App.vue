@@ -51,8 +51,8 @@
       <!-- 设置标签页 -->
       <div v-if="activeTab === 'settings'">
         <div class="flex gap-4 flex-col">
-          <WriteathonSettings />
           <SyncSettings />
+          <WriteathonSettings />
         </div>
       </div>
 

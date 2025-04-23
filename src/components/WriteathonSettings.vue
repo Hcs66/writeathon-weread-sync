@@ -109,7 +109,9 @@
 
   // 打开Writeathon网站
   const openWriteathon = () => {
-    browser.tabs.create({ url: "https://www.writeathon.cn/setting" });
+    browser.tabs.create({
+      url: "https://www.writeathon.cn/setting?m=integration",
+    });
   };
 
   onMounted(loadSettings);
@@ -137,8 +139,14 @@
           <Icon icon="mdi:check-circle" class="mr-1" />
           {{ successMessage }}
         </div>
-
-        <div class="form-control mb-4">
+        <button
+          @click="openWriteathon"
+          class="btn btn-primary btn-outline w-full"
+        >
+          <Icon icon="mdi:open-in-new" class="mr-1" />
+          打开Writeathon集成设置
+        </button>
+        <div class="form-control mb-4 mt-4">
           <label class="label" for="userId">
             <span class="label-text font-bold mb-2">用户ID</span>
           </label>
@@ -198,14 +206,6 @@
             <Icon v-else icon="mdi:content-save" class="mr-1" />
             保存设置
           </button>
-
-          <button
-            @click="openWriteathon"
-            class="btn btn-primary btn-outline w-full"
-          >
-            <Icon icon="mdi:open-in-new" class="mr-1" />
-            打开Writeathon集成设置
-          </button>
         </div>
 
         <div class="mt-4 text-sm text-gray-600">
@@ -214,7 +214,7 @@
             <li>点击"打开Writeathon集成设置"按钮</li>
             <li>在Writeathon网站上登录并进入设置→集成页面</li>
             <li>复制API Token和用户ID</li>
-            <li>粘贴到上面的输入框中</li>
+            <li>粘贴到上面的输入框中（可分别粘贴保存）</li>
             <li>点击"保存设置"按钮</li>
           </ol>
         </div>

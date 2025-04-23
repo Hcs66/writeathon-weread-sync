@@ -21,16 +21,6 @@
         isLoggedIn.value = false;
         return;
       }
-
-      // 验证Cookie是否有效
-      const info = await wereadService.getUserInfo(cookie.value);
-      if (!info) {
-        isLoggedIn.value = false;
-        await storageService.clearWeReadCookie();
-        return;
-      }
-
-      userInfo.value = info;
       isLoggedIn.value = true;
     } catch (error) {
       console.error("检查登录状态失败:", error);
