@@ -79,7 +79,7 @@ export const syncService = {
       let bookmarks: WeReadBookmark[] = [];
 
       // 获取单本书的笔记和划线
-      const allNotes = await wereadService.getNotes(wereadCookie.value, bookId);
+      const allNotes = await wereadService.getReviews(wereadCookie.value, bookId);
       const allBookmarks = await wereadService.getBookmarks(
         wereadCookie.value,
         bookId
@@ -224,7 +224,7 @@ export const syncService = {
       }
 
       // 获取所有书籍信息
-      const books = await wereadService.getBooks(wereadCookie.value);
+      const books = await wereadService.getBookshelf(wereadCookie.value);
       const booksMap = new Map<string, WeReadBook>();
       books.forEach((book) => booksMap.set(book.bookId, book));
 

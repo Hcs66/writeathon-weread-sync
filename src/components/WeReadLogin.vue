@@ -51,7 +51,7 @@
         .join("; ");
 
       // 验证Cookie是否有效
-      const info = await wereadService.getUserInfo(cookieStr);
+      const info = await wereadService.getUserConfig(cookieStr);
       if (!info) {
         errorMessage.value = "微信读书Cookie无效，请重新登录微信读书网页版";
         return;

@@ -2,7 +2,7 @@
   "name": "writeathon-weread-sync",
   "description": "同步微信读书笔记到Writeathon",
   "private": true,
-  "version": "1.0.8",
+  "version": "1.0.9",
   "type": "module",
   "scripts": {
     "dev": "wxt",

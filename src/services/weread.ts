@@ -3,14 +3,16 @@ import * as CryptoJS from "crypto-js";
 import { storageService } from "./storage";
 
 // 微信读书API基础URL
-const WEREAD_URL = "https://weread.qq.com/";
+const WEREAD_URL = "https://weread.qq.com";
 const API_BASE_URL = "https://i.weread.qq.com";
+const WEREAD_USER_CONFIG_URL = `${WEREAD_URL}/api/user/config`;
 const WEREAD_NOTEBOOKS_URL = `${API_BASE_URL}/user/notebooks`;
-const WEREAD_BOOKMARKLIST_URL = `${API_BASE_URL}/book/bookmarklist`;
+const WEREAD_BOOKMARKLIST_URL = `${WEREAD_URL}/web/book/bookmarklist`;
+const WEREAD_REVIEW_LIST_URL = `${WEREAD_URL}/web/review/list`;
+const WEREAD_BOOK_INFO = `${WEREAD_URL}/web/book/info`;
+const WEREAD_BOOKSHELF_URL = `${WEREAD_URL}/web/shelf`;
 const WEREAD_CHAPTER_INFO = `${API_BASE_URL}/book/chapterInfos`;
 const WEREAD_READ_INFO_URL = `${API_BASE_URL}/book/readinfo`;
-const WEREAD_REVIEW_LIST_URL = `${API_BASE_URL}/review/list`;
-const WEREAD_BOOK_INFO = `${API_BASE_URL}/book/info`;
 const WEREAD_READDATA_DETAIL = `${API_BASE_URL}/readdata/detail`;
 const WEREAD_HISTORY_URL = `${API_BASE_URL}/readdata/summary?synckey=0`;
 
@@ -147,6 +149,33 @@ export const wereadService = {
     });
   },
 
+  // 获取用户配置
+  async getUserConfig(cookie: string): Promise<any | null> {
+    try {
+      await this.visitWeRead(cookie);
+
+      const response = await fetch(`${WEREAD_USER_CONFIG_URL}`, {
+        method: "GET",
+        headers: {
+          Cookie: cookie,
+        },
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        const errcode = data.errcode || 0;
+        this.handleErrcode(errcode);
+        return null;
+      }
+      const data = await response.json();
+
+      return data;
+    } catch (error) {
+      console.error("获取微信读书用户信息失败:", error);
+      return null;
+    }
+  },
+
   // 获取用户信息
   async getUserInfo(cookie: string): Promise<any | null> {
     try {
@@ -185,34 +214,40 @@ export const wereadService = {
   async getBookshelf(cookie: string): Promise<WeReadBook[]> {
     return await retry(async () => {
       try {
-        // 访问微信读书首页
-        await this.visitWeRead(cookie);
+        // 访问微信读书网页版
+        const response = await fetch(WEREAD_BOOKSHELF_URL, {
+          method: "GET",
+          headers: {
+            Cookie: cookie,
+          },
+        });
 
-        const response = await fetch(
-          `${API_BASE_URL}/shelf/sync?synckey=0&teenmode=0&album=1&onlyBookid=0`,
-          {
-            method: "GET",
-            headers: {
-              Cookie: cookie,
-            },
-          }
-        );
         if (!response.ok) {
-          const data = await response.json();
-          const errcode = data.errcode || 0;
-          this.handleErrcode(errcode);
-          throw new Error(`Could not get bookshelf: ${JSON.stringify(data)}`);
+          throw new Error(`获取书架页面失败: ${response.status}`);
         }
-        const data = await response.json();
-        const books = data.books || [];
 
-        books.sort((a: any, b: any) => b.readUpdateTime - a.readUpdateTime);
+        // 获取HTML内容
+        const html = await response.text();
+
+        // 从HTML中提取JSON数据
+        const match = html
+          .split("window.__INITIAL_STATE__=")[1]
+          ?.split(";(function()")[0];
+        if (!match) {
+          throw new Error("无法从页面中提取书架数据");
+        }
+
+        // 解析JSON数据
+        const shelfInfo = JSON.parse(match);
+        const books = shelfInfo.shelf.booksAndArchives || [];
+
+        // 转换为WeReadBook格式
         return books.map((item: any) => ({
           bookId: item.bookId,
           title: item.title,
           author: item.author,
           cover: item.cover,
-          category: this.getCategory(item.categories),
+          category: this.getCategory(item.categories || []),
         }));
       } catch (error) {
         console.error("获取微信读书书架失败:", error);
@@ -229,7 +264,7 @@ export const wereadService = {
         await this.visitWeRead(cookie);
 
         // 使用正确的API端点获取书架信息
-        const response = await fetch(WEREAD_NOTEBOOKS_URL, {
+        const response = await fetch(`${WEREAD_URL}/user/notebooks`, {
           method: "GET",
           headers: {
             Cookie: cookie,
@@ -302,37 +337,7 @@ export const wereadService = {
   },
 
   // 获取笔记列表
-  async getNotes(cookie: string, bookId: string): Promise<WeReadNote[]> {
-    return await retry(async () => {
-      try {
-        // 访问微信读书首页
-        await this.visitWeRead(cookie);
-
-        // 获取笔记列表
-        const reviews = await this.getReviewList(cookie, bookId);
-
-        if (!reviews || !reviews.length) return [];
-
-        // 处理笔记数据
-        return (
-          reviews.map((review: any) => ({
-            bookId,
-            chapterUid: review.chapterUid,
-            createTime: review.createTime,
-            markText: review.abstract || "",
-            content: review.content || "",
-            noteId: review.reviewId,
-          })) || []
-        );
-      } catch (error) {
-        console.error("获取微信读书笔记列表失败:", error);
-        throw error;
-      }
-    });
-  },
-
-  // 获取书评列表
-  async getReviewList(cookie: string, bookId: string): Promise<any[]> {
+  async getReviews(cookie: string, bookId: string): Promise<WeReadNote[]> {
     return await retry(async () => {
       try {
         // 访问微信读书首页
@@ -341,6 +346,7 @@ export const wereadService = {
         const params = new URLSearchParams({
           bookId,
           listType: "11",
+          listMode: "3",
           mine: "1",
           syncKey: "0",
         });
@@ -362,10 +368,12 @@ export const wereadService = {
         }
 
         const data = await response.json();
-        const reviews = data.reviews || [];
+        const rawReviews = data.reviews || [];
+
+        if (!rawReviews || !rawReviews.length) return [];
 
         // 处理评论数据
-        return reviews
+        const reviews = rawReviews
           .map((item: any) => item.review)
           .map((review: any) => {
             if (review.type === 4) {
@@ -373,8 +381,70 @@ export const wereadService = {
             }
             return review;
           });
+
+        // 处理笔记数据
+        return (
+          reviews.map((review: any) => ({
+            bookId,
+            chapterUid: review.chapterUid,
+            createTime: review.createTime,
+            markText: review.abstract || "",
+            content: review.content || "",
+            noteId: review.reviewId,
+          })) || []
+        );
       } catch (error) {
-        console.error(`获取书评列表失败:`, error);
+        console.error("获取微信读书笔记列表失败:", error);
+        throw error;
+      }
+    });
+  },
+
+  // 获取划线列表
+  async getBookmarks(
+    cookie: string,
+    bookId: string
+  ): Promise<WeReadBookmark[]> {
+    return await retry(async () => {
+      try {
+        // 访问微信读书首页
+        await this.visitWeRead(cookie);
+
+        const params = new URLSearchParams({
+          bookId,
+          syncKey: "0",
+        });
+
+        const response = await fetch(`${WEREAD_BOOKMARKLIST_URL}?${params}`, {
+          method: "GET",
+          headers: {
+            Cookie: cookie,
+          },
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          const errcode = data.errcode || 0;
+          this.handleErrcode(errcode);
+          throw new Error(
+            `Could not get ${bookId} bookmark list: ${JSON.stringify(data)}`
+          );
+        }
+
+        const data = await response.json();
+
+        if (!data.updated || !data.updated.length) return [];
+
+        // 筛选纯划线（没有笔记内容的标记）
+        return data.updated.map((bookmark: any) => ({
+          bookId,
+          chapterUid: bookmark.chapterUid,
+          createTime: bookmark.createTime,
+          markText: bookmark.markText,
+          bookmarkId: bookmark.bookmarkId,
+        }));
+      } catch (error) {
+        console.error("获取微信读书划线列表失败:", error);
         throw error;
       }
     });
@@ -450,7 +520,6 @@ export const wereadService = {
   async getReadInfo(cookie: string, bookId: string): Promise<any> {
     return await retry(async () => {
       try {
-
         // 访问微信读书首页
         await this.visitWeRead(cookie);
 
@@ -497,81 +566,6 @@ export const wereadService = {
     });
   },
 
-  // 获取历史数据
-  async getApiData(cookie: string): Promise<any> {
-    try {
-      // 访问微信读书首页
-      await this.visitWeRead(cookie);
-
-      const response = await fetch(WEREAD_HISTORY_URL, {
-        method: "GET",
-        headers: {
-          Cookie: cookie,
-        },
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        const errcode = data.errcode || 0;
-        this.handleErrcode(errcode);
-        throw new Error(`get history data failed: ${JSON.stringify(data)}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error("获取历史数据失败:", error);
-      throw error;
-    }
-  },
-
-  // 获取划线列表
-  async getBookmarks(
-    cookie: string,
-    bookId: string
-  ): Promise<WeReadBookmark[]> {
-    return await retry(async () => {
-      try {
-        // 访问微信读书首页
-        await this.visitWeRead(cookie);
-
-        const response = await fetch(
-          `${WEREAD_BOOKMARKLIST_URL}?bookId=${bookId}`,
-          {
-            method: "GET",
-            headers: {
-              Cookie: cookie,
-            },
-          }
-        );
-
-        if (!response.ok) {
-          const data = await response.json();
-          const errcode = data.errcode || 0;
-          this.handleErrcode(errcode);
-          throw new Error(
-            `Could not get ${bookId} bookmark list: ${JSON.stringify(data)}`
-          );
-        }
-
-        const data = await response.json();
-
-        if (!data.updated || !data.updated.length) return [];
-
-        // 筛选纯划线（没有笔记内容的标记）
-        return data.updated.map((bookmark: any) => ({
-          bookId,
-          chapterUid: bookmark.chapterUid,
-          createTime: bookmark.createTime,
-          markText: bookmark.markText,
-          bookmarkId: bookmark.bookmarkId,
-        }));
-      } catch (error) {
-        console.error("获取微信读书划线列表失败:", error);
-        throw error;
-      }
-    });
-  },
-
   // 获取最近的笔记和划线
   async getRecentNotes(
     cookie: string,
@@ -580,7 +574,7 @@ export const wereadService = {
   ): Promise<{ notes: WeReadNote[]; bookmarks: WeReadBookmark[] }> {
     try {
       // 获取所有书籍
-      const books = await this.getBooks(cookie);
+      const books = await this.getBookshelf(cookie);
 
       if (!books.length) {
         console.log("没有找到任何书籍");
@@ -596,10 +590,10 @@ export const wereadService = {
       for (const book of books) {
         // 延迟一段时间，避免请求过于频繁
         await delay();
-        
+
         console.log(`处理书籍: ${book.title} (${book.bookId})`);
 
-        const notes = await this.getNotes(cookie, book.bookId);
+        const notes = await this.getReviews(cookie, book.bookId);
 
         const bookmarks = await this.getBookmarks(cookie, book.bookId);
 

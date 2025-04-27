@@ -67,7 +67,7 @@
       }
 
       // 获取所有书籍信息
-      const allBooks = await wereadService.getBooks(wereadCookie.value);
+      const allBooks = await wereadService.getBookshelf(wereadCookie.value);
 
       // 筛选已同步的书籍
       const synced: SyncedBookData[] = [];
