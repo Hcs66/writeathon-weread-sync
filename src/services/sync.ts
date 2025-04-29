@@ -33,7 +33,12 @@ export const syncService = {
   async syncSingleBook(
     bookId: string,
     isIncremental: boolean = false
-  ): Promise<{ success: boolean; message: string; count: number }> {
+  ): Promise<{
+    success: boolean;
+    message: string;
+    notesCount: number;
+    bookmarksCount: number;
+  }> {
     try {
       // 获取设置
       const writeathonSettings = await storageService.getWriteathonSettings();
@@ -45,12 +50,14 @@ export const syncService = {
         return {
           success: false,
           message: "请先设置Writeathon API Token和用户ID",
-          count: 0,
+          notesCount: 0,
+          bookmarksCount: 0,
         };
       }
 
       if (!wereadCookie) {
-        return { success: false, message: "请先登录微信读书", count: 0 };
+        return { success: false, message: "请先登录微信读书",           notesCount: 0,
+          bookmarksCount: 0, };
       }
 
       // 验证Writeathon凭证
@@ -61,7 +68,8 @@ export const syncService = {
         return {
           success: false,
           message: "Writeathon API Token或用户ID无效",
-          count: 0,
+          notesCount: 0,
+          bookmarksCount: 0,
         };
       }
 
@@ -71,7 +79,8 @@ export const syncService = {
         bookId
       );
       if (!book) {
-        return { success: false, message: "获取书籍详情失败", count: 0 };
+        return { success: false, message: "获取书籍详情失败",           notesCount: 0,
+          bookmarksCount: 0, };
       }
 
       // 获取书籍的笔记和划线
@@ -79,7 +88,10 @@ export const syncService = {
       let bookmarks: WeReadBookmark[] = [];
 
       // 获取单本书的笔记和划线
-      const allNotes = await wereadService.getReviews(wereadCookie.value, bookId);
+      const allNotes = await wereadService.getReviews(
+        wereadCookie.value,
+        bookId
+      );
       const allBookmarks = await wereadService.getBookmarks(
         wereadCookie.value,
         bookId
@@ -96,8 +108,6 @@ export const syncService = {
             bookLastSyncTime
           ).toLocaleString()}`
         );
-
-        console.log(bookLastSyncTime);
 
         if (bookLastSyncTime > 0) {
           // 根据书籍上次同步时间过滤
@@ -119,7 +129,8 @@ export const syncService = {
       }
 
       if (notes.length === 0 && bookmarks.length === 0) {
-        return { success: true, message: "该书籍没有笔记和划线", count: 0 };
+        return { success: true, message: "该书籍没有笔记和划线",           notesCount: 0,
+          bookmarksCount: 0, };
       }
 
       // 同步历史记录
@@ -160,14 +171,16 @@ export const syncService = {
       return {
         success: true,
         message: syncHistory.message,
-        count: notes.length + bookmarks.length,
+        notesCount: notes.length,
+        bookmarksCount: bookmarks.length,
       };
     } catch (error: any) {
       console.error("同步单本书籍失败:", error);
       return {
         success: false,
         message: `同步失败: ${error.message || "未知错误"}`,
-        count: 0,
+        notesCount: 0,
+        bookmarksCount: 0,
       };
     }
   },
@@ -212,73 +225,84 @@ export const syncService = {
         return { success: false, message: "Writeathon API Token或用户ID无效" };
       }
 
-      // 获取最近的笔记和划线（使用上次同步时间进行增量同步）
-      const { notes, bookmarks } = await wereadService.getRecentNotes(
-        wereadCookie.value,
-        syncSettings.syncRange,
-        syncSettings.lastSyncTime
-      );
+      // 获取自动同步的书籍ID列表
+      const autoSyncBookIds = await storageService.getAutoSyncBookIds();
 
-      if (notes.length === 0 && bookmarks.length === 0) {
-        return { success: true, message: "没有找到需要同步的书籍" };
+      if (autoSyncBookIds.length === 0) {
+        return { success: false, message: "没有设置自动同步的书籍" };
       }
 
-      // 获取所有书籍信息
-      const books = await wereadService.getBookshelf(wereadCookie.value);
-      const booksMap = new Map<string, WeReadBook>();
-      books.forEach((book) => booksMap.set(book.bookId, book));
+      // 获取书架中的所有书籍
+      const allBooks = await wereadService.getBookshelf(wereadCookie.value);
 
-      // 更新总书籍数量
+      // 筛选出需要自动同步的书籍
+      const booksToSync = allBooks.filter((book) =>
+        autoSyncBookIds.includes(book.bookId)
+      );
+
+      if (booksToSync.length === 0) {
+        return { success: false, message: "没有找到需要自动同步的书籍" };
+      }
+
+      // 初始化同步进度
       updateSyncProgress({
         currentBook: 0,
-        totalBooks: booksMap.size,
+        totalBooks: booksToSync.length,
         currentBookTitle: "",
         isCompleted: false,
         isAutoSync,
       });
 
-      // 同步历史记录
-      const syncHistory: SyncHistory = {
-        id: uuidv4(),
-        timestamp: new Date().toISOString(),
-        notesCount: notes.length,
-        bookmarksCount: bookmarks.length,
-        success: true,
-        message: "",
-      };
+      let totalNotes = 0;
+      let totalBookmarks = 0;
 
-      // 处理笔记和划线
-      const syncResults = await this.processNotesAndBookmarks(
-        notes,
-        bookmarks,
-        booksMap,
-        writeathonSettings,
-        syncSettings.mergeNotes,
-        isAutoSync
-      );
+      // 逐本同步书籍
+      for (let i = 0; i < booksToSync.length; i++) {
+        const book = booksToSync[i];
+
+        // 更新同步进度
+        updateSyncProgress({
+          currentBook: i + 1,
+          totalBooks: booksToSync.length,
+          currentBookTitle: book.title,
+          isCompleted: false,
+          isAutoSync,
+        });
+
+        // 获取书籍的上次同步时间
+        const lastSyncTime = await storageService.getBookLastSyncTime(
+          book.bookId
+        );
+
+        // 增量同步书籍
+        const result = await this.syncSingleBook(book.bookId, true);
+
+        totalNotes += result.notesCount;
+        totalBookmarks += result.bookmarksCount;
+      }
+
       // 更新同步进度为完成
       updateSyncProgress({
-        currentBook: booksMap.size,
-        totalBooks: booksMap.size,
+        currentBook: booksToSync.length,
+        totalBooks: booksToSync.length,
         currentBookTitle: "",
         isCompleted: true,
         isAutoSync,
       });
 
-      // 更新同步历史
-      syncHistory.success = syncResults.success;
-      syncHistory.message = syncResults.message;
-
-      // 保存同步历史
-      await storageService.saveSyncHistory(syncHistory);
-
-      // 更新上次同步时间
-      syncSettings.lastSyncTime = Date.now();
-      await storageService.saveSyncSettings(syncSettings);
+      // 保存同步历史记录
+      await storageService.saveSyncHistory({
+        id: uuidv4(),
+        timestamp: new Date().toISOString(),
+        notesCount: totalNotes,
+        bookmarksCount: totalBookmarks,
+        message: `自动同步了 ${booksToSync.length} 本书籍`,
+        success: true,
+      });
 
       return {
-        success: syncResults.success,
-        message: syncResults.message,
+        success: true,
+        message: `自动同步完成，共同步了 ${booksToSync.length} 本书籍，${totalNotes} 条笔记，${totalBookmarks} 条划线`,
       };
     } catch (error: any) {
       console.error("同步失败:", error);

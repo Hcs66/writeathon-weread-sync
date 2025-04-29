@@ -55,13 +55,33 @@
 
         <div class="collapse collapse-arrow bg-base-200 mb-2">
           <input type="checkbox" />
-          <div class="collapse-title font-medium">3. 同步设置</div>
+          <div class="collapse-title font-medium">3.1 同步设置</div>
           <div class="collapse-content">
             <ul class="list-disc pl-5">
               <li>选择同步范围（最近1天、最近7天、14天、30天或全部）</li>
-              <li>选择自动同步间隔（如需自动同步）</li>
               <li>选择是否合并同一本书的笔记和划线</li>
               <li>保存设置</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="collapse collapse-arrow bg-base-200 mb-2">
+          <input type="checkbox" />
+          <div class="collapse-title font-medium">3.2 选择自动同步书籍</div>
+
+          <div class="collapse-content">
+            <p>
+              您可以在"我的书架"中为特定书籍开启自动同步功能。开启后，系统将在每次执行自动同步时，只同步您选择的书籍。
+            </p>
+            <p class="my-2">
+              注意：只有已经同步过的书籍才能设置自动同步。如果您想要自动同步一本新书，请先手动同步一次。
+            </p>
+            <ul class="list-disc pl-5">
+              <li>点击底部导航栏中的"书籍"选项</li>
+              <li>切换到"我的书架"标签页</li>
+              <li>对于已同步过的书籍，您可以看到"自动同步"开关</li>
+              <li>打开开关，即可将该书籍添加到自动同步列表</li>
+              <li>关闭开关，则该书籍将不会被自动同步</li>
             </ul>
           </div>
         </div>

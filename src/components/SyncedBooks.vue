@@ -23,6 +23,7 @@
   // 书架数据
   interface BookshelfBookData extends WeReadBook {
     isSynced: boolean;
+    isAutoSync: boolean; // 新增
     notesCount?: number;
     bookmarksCount?: number;
   }
@@ -42,6 +43,10 @@
   // 分页相关 - 书架
   const bookshelfCurrentPage = ref(1);
   const bookshelfTotalPages = ref(0);
+
+  // 搜索相关
+  const syncedSearchQuery = ref("");
+  const bookshelfSearchQuery = ref("");
 
   // 获取已同步的书籍数据
   const loadSyncedBooks = async () => {
@@ -110,16 +115,22 @@
       // 获取已同步的书籍ID列表
       const syncedBookIds = await storageService.getSyncedBookIds();
 
+      // 获取自动同步的书籍ID列表
+      const autoSyncBookIds = await storageService.getAutoSyncBookIds();
+
       // 获取书架数据
       const books = await wereadService.getBookshelf(wereadCookie.value);
+
       // 为每本书添加同步状态
       const booksWithSyncStatus: BookshelfBookData[] = [];
 
       for (const book of books) {
         const isSynced = syncedBookIds.includes(book.bookId);
+        const isAutoSync = autoSyncBookIds.includes(book.bookId);
         const bookData: BookshelfBookData = {
           ...book,
           isSynced,
+          isAutoSync,
         };
 
         booksWithSyncStatus.push(bookData);
@@ -134,6 +145,22 @@
       bookshelfErrorMessage.value = "加载书架数据失败";
     } finally {
       isBookshelfLoading.value = false;
+    }
+  };
+
+  // 切换书籍自动同步状态
+  const toggleAutoSync = async (book: BookshelfBookData) => {
+    try {
+      if (book.isAutoSync) {
+        await storageService.removeAutoSyncBookId(book.bookId);
+      } else {
+        await storageService.saveAutoSyncBookId(book.bookId);
+      }
+
+      // 更新UI状态
+      book.isAutoSync = !book.isAutoSync;
+    } catch (error) {
+      console.error("切换自动同步状态失败:", error);
     }
   };
 
@@ -173,7 +200,10 @@
       syncResult.value = result;
 
       // 如果同步成功，重新加载已同步书籍数据
-      if (result.success && result.count > 0) {
+      if (
+        result.success &&
+        (result.notesCount > 0 || result.bookmarksCount > 0)
+      ) {
         await loadBookshelf();
         loadSyncedBooks();
       }
@@ -188,37 +218,63 @@
     }
   };
 
-  // 获取当前页的已同步书籍
+  // 获取当前页的已同步书籍（添加搜索过滤）
+  const filteredSyncedBooks = computed(() => {
+    if (!syncedSearchQuery.value) return syncedBooks.value;
+
+    const query = syncedSearchQuery.value.toLowerCase();
+    return syncedBooks.value.filter(
+      (book) =>
+        book.title.toLowerCase().includes(query) ||
+        book.author.toLowerCase().includes(query)
+    );
+  });
+
   const paginatedSyncedBooks = computed(() => {
     const start = (syncedCurrentPage.value - 1) * pageSize;
     const end = start + pageSize;
-    return syncedBooks.value.slice(start, end);
+    return filteredSyncedBooks.value.slice(start, end);
   });
 
-  // 获取当前页的书架书籍
+  // 获取当前页的书架书籍（添加搜索过滤）
+  const filteredBookshelfBooks = computed(() => {
+    if (!bookshelfSearchQuery.value) return bookshelfBooks.value;
+
+    const query = bookshelfSearchQuery.value.toLowerCase();
+    return bookshelfBooks.value.filter(
+      (book) =>
+        book.title.toLowerCase().includes(query) ||
+        book.author.toLowerCase().includes(query)
+    );
+  });
+
   const paginatedBookshelfBooks = computed(() => {
     const start = (bookshelfCurrentPage.value - 1) * pageSize;
     const end = start + pageSize;
-    return bookshelfBooks.value.slice(start, end);
+    return filteredBookshelfBooks.value.slice(start, end);
   });
 
-  // 切换已同步书籍页面
-  const goToSyncedPage = (page: number) => {
-    if (page >= 1 && page <= syncedTotalPages.value) {
-      syncedCurrentPage.value = page;
-      document.scrollingElement?.scrollTo(0, 0);
-    }
+  // 更新分页计算逻辑
+  // const syncedTotalPages = computed(() =>
+  //   Math.ceil(filteredSyncedBooks.value.length / pageSize)
+  // );
+
+  // const bookshelfTotalPages = computed(() =>
+  //   Math.ceil(filteredBookshelfBooks.value.length / pageSize)
+  // );
+
+  // 重置搜索和分页
+  const resetSyncedSearch = () => {
+    syncedSearchQuery.value = "";
+    syncedCurrentPage.value = 1;
   };
 
-  // 切换书架页面
-  const goToBookshelfPage = (page: number) => {
-    if (page >= 1 && page <= bookshelfTotalPages.value) {
-      bookshelfCurrentPage.value = page;
-      document.scrollingElement?.scrollTo(0, 0);
-    }
+  const resetBookshelfSearch = () => {
+    bookshelfSearchQuery.value = "";
+    bookshelfCurrentPage.value = 1;
   };
 
-  // 切换标签页
+  // 切换标签页时重置搜索
   const switchTab = (tab: "synced" | "bookshelf") => {
     activeTab.value = tab;
 
@@ -233,6 +289,7 @@
 
   // 计算属性：转换封面图片URL
   const bookCover = computed(() => (cover: string) => {
+    if (!cover) return "";
     // 替换封面图片URL中的"s_"为"t6"，以获取更清晰的图片
     const index = cover.lastIndexOf("s_");
     if (index === -1) {
@@ -272,6 +329,25 @@
           </button>
         </div>
 
+        <!-- 搜索框 -->
+        <div class="form-control mb-4 mt-4">
+          <label class="input">
+            <input
+              type="text"
+              placeholder="搜索书籍标题或作者..."
+              v-model="syncedSearchQuery"
+              @input="syncedCurrentPage = 1"
+            />
+            <button
+              class="btn btn-sm btn-ghost btn-circle"
+              @click="resetSyncedSearch"
+              v-if="syncedSearchQuery"
+            >
+              <Icon icon="mdi:close" class="text-lg" />
+            </button>
+          </label>
+        </div>
+
         <div v-if="isSyncedLoading" class="flex justify-center py-8">
           <span class="loading loading-spinner loading-lg"></span>
         </div>
@@ -290,6 +366,14 @@
         >
           <Icon icon="mdi:information" class="text-lg" />
           <span>暂无已同步的书籍数据</span>
+        </div>
+
+        <div
+          v-else-if="filteredSyncedBooks.length === 0"
+          class="alert alert-info alert-soft"
+        >
+          <Icon icon="mdi:information" class="text-lg" />
+          <span>没有找到匹配的书籍</span>
         </div>
 
         <div v-else>
@@ -330,7 +414,7 @@
               <button
                 class="join-item btn btn-sm"
                 :class="{ 'btn-disabled': syncedCurrentPage === 1 }"
-                @click="goToSyncedPage(syncedCurrentPage - 1)"
+                @click="syncedCurrentPage--"
               >
                 <Icon icon="mdi:chevron-left" />
               </button>
@@ -342,7 +426,7 @@
                 :class="{
                   'btn-disabled': syncedCurrentPage === syncedTotalPages,
                 }"
-                @click="goToSyncedPage(syncedCurrentPage + 1)"
+                @click="syncedCurrentPage++"
               >
                 <Icon icon="mdi:chevron-right" />
               </button>
@@ -351,7 +435,9 @@
 
           <!-- 书籍总数信息 -->
           <div class="text-center text-sm text-gray-500 mt-2">
-            共 {{ syncedBooks.length }} 本已同步书籍
+            共 {{ filteredSyncedBooks.length }} 本{{
+              syncedSearchQuery ? "匹配的" : "已同步"
+            }}书籍
           </div>
         </div>
       </div>
@@ -363,6 +449,25 @@
           <button class="btn btn-sm btn-circle" @click="loadBookshelf">
             <Icon icon="mdi:refresh" class="text-lg" />
           </button>
+        </div>
+
+        <!-- 搜索框 -->
+        <div class="form-control mb-4 mt-4">
+          <label class="input">
+            <input
+              type="text"
+              placeholder="搜索书籍标题或作者..."
+              v-model="bookshelfSearchQuery"
+              @input="bookshelfCurrentPage = 1"
+            />
+            <button
+              class="btn btn-sm btn-ghost btn-circle"
+              @click="resetBookshelfSearch"
+              v-if="bookshelfSearchQuery"
+            >
+              <Icon icon="mdi:close" class="text-lg" />
+            </button>
+          </label>
         </div>
 
         <!-- 同步结果提示 -->
@@ -401,6 +506,14 @@
           <span>暂无书架数据</span>
         </div>
 
+        <div
+          v-else-if="filteredBookshelfBooks.length === 0"
+          class="alert alert-info alert-soft"
+        >
+          <Icon icon="mdi:information" class="text-lg" />
+          <span>没有找到匹配的书籍</span>
+        </div>
+
         <div v-else>
           <div
             v-for="book in paginatedBookshelfBooks"
@@ -427,7 +540,8 @@
                 </a>
               </h3>
               <p class="text-sm opacity-70">作者: {{ book.author }}</p>
-              <!-- 同步状态和同步按钮 -->
+
+              <!-- 同步按钮和同步开关 -->
               <div class="flex justify-between items-center w-full">
                 <div class="flex gap-2">
                   <button
@@ -448,6 +562,17 @@
                     }}
                   </button>
                 </div>
+                <div class="flex items-center justify-end" v-if="book.isSynced">
+                  <span class="text-sm mr-2">自动同步</span>
+                  <input
+                    type="checkbox"
+                    class="toggle toggle-primary toggle-sm"
+                    :checked="book.isAutoSync"
+                    @change="toggleAutoSync(book)"
+                  />
+                </div>
+              </div>
+              <div class="flex justify-end">
                 <div
                   v-if="book.isSynced"
                   class="badge badge-success badge-sm text-white flex gap-1"
@@ -464,7 +589,7 @@
               <button
                 class="join-item btn btn-sm"
                 :class="{ 'btn-disabled': bookshelfCurrentPage === 1 }"
-                @click="goToBookshelfPage(bookshelfCurrentPage - 1)"
+                @click="bookshelfCurrentPage--"
               >
                 <Icon icon="mdi:chevron-left" />
               </button>
@@ -476,7 +601,7 @@
                 :class="{
                   'btn-disabled': bookshelfCurrentPage === bookshelfTotalPages,
                 }"
-                @click="goToBookshelfPage(bookshelfCurrentPage + 1)"
+                @click="bookshelfCurrentPage++"
               >
                 <Icon icon="mdi:chevron-right" />
               </button>
@@ -484,7 +609,9 @@
           </div>
           <!-- 书籍总数信息 -->
           <div class="text-center text-sm text-gray-500 mt-2">
-            共 {{ bookshelfBooks.length }} 本书籍
+            共 {{ filteredBookshelfBooks.length }} 本{{
+              bookshelfSearchQuery ? "匹配的" : ""
+            }}书籍
           </div>
         </div>
       </div>

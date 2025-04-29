@@ -169,4 +169,39 @@ export const storageService = {
     await browser.storage.local.set({ [key]: timestamp });
   },
 
+  // 获取自动同步的书籍ID列表
+  async getAutoSyncBookIds(): Promise<string[]> {
+    const result = await browser.storage.local.get("autoSyncBooks");    
+    return (result.autoSyncBooks as string[]) || [];
+  },
+
+  // 保存自动同步的书籍ID
+  async saveAutoSyncBookId(bookId: string): Promise<void> {
+    const autoSyncBooks = await this.getAutoSyncBookIds();    
+    if (!autoSyncBooks.includes(bookId)) {
+      autoSyncBooks.push(bookId);
+      await browser.storage.local.set({ autoSyncBooks: autoSyncBooks });
+    }
+  },
+
+  // 移除自动同步的书籍ID
+  async removeAutoSyncBookId(bookId: string): Promise<void> {
+    const autoSyncBooks = await this.getAutoSyncBookIds();
+    const index = autoSyncBooks.indexOf(bookId);
+    if (index !== -1) {
+      autoSyncBooks.splice(index, 1);
+      await browser.storage.local.set({ autoSyncBooks: autoSyncBooks });
+    }
+  },
+
+  // 检查书籍是否设置为自动同步
+  async isBookAutoSync(bookId: string): Promise<boolean> {
+    const autoSyncBooks = await this.getAutoSyncBookIds();
+    return autoSyncBooks.includes(bookId);
+  },
+
+  // 清除自动同步的书籍ID列表
+  async clearAutoSyncBookIds(): Promise<void> {
+    await browser.storage.local.set({ autoSyncBooks: [] });
+  },
 };
