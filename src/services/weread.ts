@@ -30,6 +30,19 @@ const delay = async (ms?: number): Promise<void> => {
   await new Promise((resolve) => setTimeout(resolve, totalDelay));
 };
 
+const chunkArray = (arr: [], size: number) => {
+  if (!Array.isArray(arr) || typeof size !== "number" || size <= 0) {
+    return [];
+  }
+
+  const result = [];
+  for (let i = 0; i < arr.length; i += size) {
+    result.push(arr.slice(i, i + size));
+  }
+
+  return result;
+};
+
 // 重试函数装饰器
 const retry = async <T>(
   fn: () => Promise<T>,
@@ -245,8 +258,33 @@ export const wereadService = {
         const bookIds = shelfInfo.shelf.rawIndexes || [];
         if (!bookIds || !bookIds.length) return [];
 
-        // 延迟
-        await delay();
+        // 分批次获取书籍Id
+        const bookIdsChunks = chunkArray(bookIds, 100);
+        
+        const books: WeReadBook[] = [];
+        // 遍历bookIdsChunks
+        for (let index = 0; index < bookIdsChunks.length; index++) {
+          const bookIdsChunk = bookIdsChunks[index];
+          await delay();
+          books.push(
+            ...(await this.getBookshelfSync(bookIdsChunk, cookie))
+          );
+        }
+        return books;
+      } catch (error) {
+        console.error("获取我的书架:", error);
+        throw error;
+      }
+    });
+  },
+
+  // 获取书籍列表
+  async getBookshelfSync(
+    bookIds: string[],
+    cookie: string
+  ): Promise<WeReadBook[]> {
+    return await retry(async () => {
+      try {
 
         // 根据bookid获取书籍详情
         const body = {
@@ -257,7 +295,7 @@ export const wereadService = {
           loadMore: true,
         };
 
-        const syncResponse = await fetch(WEREAD_BOOKSHELF_SYNC_URL, {
+        const response = await fetch(WEREAD_BOOKSHELF_SYNC_URL, {
           method: "POST",
           headers: {
             Cookie: cookie,
@@ -265,15 +303,16 @@ export const wereadService = {
           },
           body: JSON.stringify(body),
         });
-        if (!syncResponse.ok) {
-          throw new Error(`分页获取我的书架失败: ${syncResponse.status}`);
+
+        if (!response.ok) {
+          throw new Error(`分页获取我的书架失败: ${response.status}`);
         }
 
-        const data = await syncResponse.json();
+        const data = await response.json();
 
         if (!data || !data.books) return [];
         const books = data.books;
-        
+
         // 转换为WeReadBook格式
         return books.map((item: any) => ({
           bookId: item.bookId,
@@ -283,7 +322,7 @@ export const wereadService = {
           category: this.getCategory(item.categories || []),
         }));
       } catch (error) {
-        console.error("获取我的书架:", error);
+        console.error("分页获取我的书架失败:", error);
         throw error;
       }
     });
