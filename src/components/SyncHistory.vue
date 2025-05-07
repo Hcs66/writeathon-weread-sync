@@ -7,6 +7,7 @@
   const histories = ref<SyncHistory[]>([]);
   const isLoading = ref(false);
   const isClearing = ref(false);
+  const isDeleting = ref(false);
   const errorMessage = ref("");
   const successMessage = ref("");
 
@@ -51,6 +52,32 @@
       errorMessage.value = "清除同步历史失败";
     } finally {
       isClearing.value = false;
+    }
+  };
+
+  // 删除单条同步历史
+  const deleteHistoryItem = async (historyId: string) => {
+    if (!confirm("确定要删除这条同步记录吗？")) return;
+
+    isDeleting.value = true;
+    errorMessage.value = "";
+    successMessage.value = "";
+
+    try {
+      await storageService.deleteSyncHistoryItem(historyId);
+      await loadHistory(); // 重新加载历史记录
+
+      // 处理分页：如果当前页没有数据了，则回到上一页
+      if (paginatedHistories.value.length === 0 && currentPage.value > 1) {
+        currentPage.value--;
+      }
+
+      successMessage.value = "记录已删除";
+    } catch (error) {
+      console.error("删除同步记录失败:", error);
+      errorMessage.value = "删除同步记录失败";
+    } finally {
+      isDeleting.value = false;
     }
   };
 
@@ -140,12 +167,22 @@
               <span class="text-sm text-gray-600">{{
                 formatDate(history.timestamp)
               }}</span>
-              <span
-                class="badge badge-soft"
-                :class="history.success ? 'badge-success' : 'badge-error'"
-              >
-                {{ history.success ? "成功" : "失败" }}
-              </span>
+              <div class="flex items-center gap-2">
+                <span
+                  class="badge badge-soft"
+                  :class="history.success ? 'badge-success' : 'badge-error'"
+                >
+                  {{ history.success ? "成功" : "失败" }}
+                </span>
+                <button
+                  @click.stop="deleteHistoryItem(history.id)"
+                  class="btn btn-ghost btn-xs btn-circle"
+                  :disabled="isDeleting"
+                  title="删除此记录"
+                >
+                  <Icon icon="mdi:delete-outline" class="text-error" />
+                </button>
+              </div>
             </div>
 
             <div class="text-sm">
@@ -193,6 +230,7 @@
           <!-- 历史记录总数信息 -->
           <div class="text-center text-sm text-gray-500 mt-2">
             共 {{ histories.length }} 条同步历史记录
+            <span v-if="totalPages > 1">，当前显示第 {{ currentPage }} 页</span>
           </div>
         </div>
       </div>

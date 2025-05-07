@@ -8,6 +8,7 @@ const API_BASE_URL = "https://i.weread.qq.com";
 const WEREAD_USER_CONFIG_URL = `${WEREAD_URL}/api/user/config`;
 const WEREAD_NOTEBOOKS_URL = `${API_BASE_URL}/user/notebooks`;
 const WEREAD_BOOKMARKLIST_URL = `${WEREAD_URL}/web/book/bookmarklist`;
+const WEREAD_BOOKSHELF_SYNC_URL = `${WEREAD_URL}/web/shelf/syncBook`;
 const WEREAD_REVIEW_LIST_URL = `${WEREAD_URL}/web/review/list`;
 const WEREAD_BOOK_INFO = `${WEREAD_URL}/web/book/info`;
 const WEREAD_BOOKSHELF_URL = `${WEREAD_URL}/web/shelf`;
@@ -134,9 +135,9 @@ export const wereadService = {
 
   // 获取书籍URL
   getUrl(bookId: string): string {
-    return `https://weread.qq.com/web/reader/${this.calculateBookStrId(
-      bookId
-    )}`;
+    return !bookId
+      ? "https://weread.qq.com/web/shelf"
+      : `https://weread.qq.com/web/reader/${this.calculateBookStrId(bookId)}`;
   },
 
   // 访问微信读书首页
@@ -214,6 +215,8 @@ export const wereadService = {
   async getBookshelf(cookie: string): Promise<WeReadBook[]> {
     return await retry(async () => {
       try {
+        await this.visitWeRead(cookie);
+
         // 访问微信读书网页版
         const response = await fetch(WEREAD_BOOKSHELF_URL, {
           method: "GET",
@@ -239,8 +242,38 @@ export const wereadService = {
 
         // 解析JSON数据
         const shelfInfo = JSON.parse(match);
-        const books = shelfInfo.shelf.booksAndArchives || [];
+        const bookIds = shelfInfo.shelf.rawIndexes || [];
+        if (!bookIds || !bookIds.length) return [];
 
+        // 延迟
+        await delay();
+
+        // 根据bookid获取书籍详情
+        const body = {
+          bookIds: bookIds.map((item: any) => item.bookId),
+          count: bookIds.length,
+          isArchive: null,
+          currentArchiveId: null,
+          loadMore: true,
+        };
+
+        const syncResponse = await fetch(WEREAD_BOOKSHELF_SYNC_URL, {
+          method: "POST",
+          headers: {
+            Cookie: cookie,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        });
+        if (!syncResponse.ok) {
+          throw new Error(`分页获取我的书架失败: ${syncResponse.status}`);
+        }
+
+        const data = await syncResponse.json();
+
+        if (!data || !data.books) return [];
+        const books = data.books;
+        
         // 转换为WeReadBook格式
         return books.map((item: any) => ({
           bookId: item.bookId,
@@ -250,7 +283,7 @@ export const wereadService = {
           category: this.getCategory(item.categories || []),
         }));
       } catch (error) {
-        console.error("获取微信读书书架失败:", error);
+        console.error("获取我的书架:", error);
         throw error;
       }
     });

@@ -95,10 +95,14 @@ export const storageService = {
   async saveSyncHistory(history: SyncHistory): Promise<void> {
     const histories = await this.getSyncHistory();
     histories.unshift(history); // 添加到历史记录的开头
+    await browser.storage.local.set({ syncHistory: histories });
+  },
 
-    // 只保留最近的20条记录
-    const recentHistories = histories.slice(0, 20);
-    await browser.storage.local.set({ syncHistory: recentHistories });
+  // 删除单条同步历史
+  async deleteSyncHistoryItem(historyId: string): Promise<void> {
+    const histories = await this.getSyncHistory();
+    const updatedHistories = histories.filter(item => item.id !== historyId);
+    await browser.storage.local.set({ syncHistory: updatedHistories });
   },
 
   // 清除同步历史
