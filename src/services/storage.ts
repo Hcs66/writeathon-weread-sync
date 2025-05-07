@@ -17,7 +17,51 @@ const DEFAULT_SYNC_SETTINGS: SyncSettings = {
 };
 
 // 存储服务
-export const storageService = {
+export const storageService = {  
+  // 导出所有存储数据
+  async exportAllData(): Promise<object> {
+    const data = await browser.storage.local.get(null);
+    return data;
+  },
+
+  // 导入存储数据（带去重功能）
+  async importData(data: object): Promise<void> {
+    // 获取当前存储的所有数据
+    const currentData = await browser.storage.local.get(null);
+    
+    // 合并数据，处理特殊字段的去重
+    const mergedData: Record<string, any> = { ...currentData };
+    
+    // 遍历导入的数据
+    for (const [key, value] of Object.entries(data)) {
+      // 特殊处理数组类型的数据，进行去重
+      if (Array.isArray(value) && Array.isArray(mergedData[key])) {
+        // 对于syncHistory等数组，根据id去重
+        if (key === 'syncHistory') {
+          const existingIds = new Set(mergedData[key].map((item: any) => item.id));
+          const newItems = value.filter((item: any) => !existingIds.has(item.id));
+          mergedData[key] = [...newItems, ...mergedData[key]];
+        } 
+        // 对于syncedBookIds等简单数组，直接去重
+        else if (['syncedBookIds', 'autoSyncBooks'].includes(key)) {
+          const uniqueSet = new Set([...mergedData[key], ...value]);
+          mergedData[key] = Array.from(uniqueSet);
+        }
+        // 其他数组类型，默认覆盖
+        else {
+          mergedData[key] = value;
+        }
+      } 
+      // 非数组类型，直接覆盖
+      else {
+        mergedData[key] = value;
+      }
+    }
+    
+    // 保存合并后的数据
+    await browser.storage.local.clear();
+    await browser.storage.local.set(mergedData);
+  },
   // 获取Writeathon设置
   async getWriteathonSettings(): Promise<WriteathonSettings> {
     const result = await browser.storage.local.get("writeathonSettings");

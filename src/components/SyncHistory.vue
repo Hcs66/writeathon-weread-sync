@@ -8,8 +8,11 @@
   const isLoading = ref(false);
   const isClearing = ref(false);
   const isDeleting = ref(false);
+  const isExporting = ref(false);
+  const isImporting = ref(false);
   const errorMessage = ref("");
   const successMessage = ref("");
+  const fileInputRef = ref<HTMLInputElement | null>(null);
 
   // 分页相关
   const currentPage = ref(1);
@@ -105,27 +108,160 @@
     currentPage.value = page;
   };
 
+  // 导出所有数据
+  const exportData = async () => {
+    isExporting.value = true;
+    errorMessage.value = "";
+    successMessage.value = "";
+
+    try {
+      // 获取所有存储数据
+      const data = await storageService.exportAllData();
+
+      // 创建下载链接
+      const dataStr = JSON.stringify(data, null, 2);
+      const blob = new Blob([dataStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+
+      // 创建下载链接并触发下载
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `writeathon-weread-sync-data-${new Date()
+        .toISOString()
+        .slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      successMessage.value = "数据导出成功";
+    } catch (error) {
+      console.error("导出数据失败:", error);
+      errorMessage.value = "导出数据失败";
+    } finally {
+      isExporting.value = false;
+    }
+  };
+
+  // 触发文件选择对话框
+  const triggerImportFile = () => {
+    if (fileInputRef.value) {
+      fileInputRef.value.click();
+    }
+  };
+
+  // 处理文件导入
+  const handleFileImport = async (event: Event) => {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) return;
+
+    const file = input.files[0];
+    if (file.type !== "application/json" && !file.name.endsWith(".json")) {
+      errorMessage.value = "请选择JSON格式的文件";
+      return;
+    }
+
+    isImporting.value = true;
+    errorMessage.value = "";
+    successMessage.value = "";
+
+    try {
+      // 读取文件内容
+      const fileContent = await readFileAsText(file);
+      const importData = JSON.parse(fileContent);
+
+      // 确认导入
+      if (
+        !confirm("确定要导入数据吗？这将合并现有数据，相同ID的记录将被去重。")
+      ) {
+        isImporting.value = false;
+        return;
+      }
+
+      // 导入数据
+      await storageService.importData(importData);
+
+      // 重新加载历史记录
+      await loadHistory();
+
+      successMessage.value = "数据导入成功";
+    } catch (error) {
+      console.error("导入数据失败:", error);
+      errorMessage.value =
+        "导入数据失败: " +
+        (error instanceof Error ? error.message : String(error));
+    } finally {
+      isImporting.value = false;
+      // 重置文件输入框
+      if (fileInputRef.value) {
+        fileInputRef.value.value = "";
+      }
+    }
+  };
+
+  // 读取文件内容为文本
+  const readFileAsText = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error("文件读取失败"));
+      reader.readAsText(file);
+    });
+  };
+
   onMounted(loadHistory);
 </script>
 
 <template>
   <div class="card bg-base-100 shadow-xl">
     <div class="card-body">
-      <div class="flex items-center justify-between">
+      <div class="flex flex-col gap-2">
         <h2 class="card-title text-primary">
           <Icon icon="mdi:history" class="mr-2" />
           同步历史
         </h2>
 
-        <button
-          v-if="histories.length > 0"
-          @click="clearHistory"
-          class="btn btn-error btn-sm btn-outline"
-          :disabled="isClearing"
-        >
-          <Icon icon="mdi:delete" class="mr-1" />
-          清除历史
-        </button>
+        <div class="flex gap-2">
+          <!-- 导入按钮 -->
+          <button
+            @click="triggerImportFile"
+            class="btn btn-primary btn-sm btn-outline"
+            :disabled="isImporting"
+          >
+            <Icon icon="mdi:file-import" class="mr-1" />
+            导入数据
+          </button>
+
+          <!-- 导出按钮 -->
+          <button
+            @click="exportData"
+            class="btn btn-info btn-sm btn-outline"
+            :disabled="isExporting"
+          >
+            <Icon icon="mdi:file-export" class="mr-1" />
+            导出数据
+          </button>
+
+          <!-- 清除历史按钮 -->
+          <button
+            v-if="histories.length > 0"
+            @click="clearHistory"
+            class="btn btn-error btn-sm btn-outline"
+            :disabled="isClearing"
+          >
+            <Icon icon="mdi:delete" class="mr-1" />
+            清除历史
+          </button>
+
+          <!-- 隐藏的文件输入框 -->
+          <input
+            ref="fileInputRef"
+            type="file"
+            accept=".json"
+            class="hidden"
+            @change="handleFileImport"
+          />
+        </div>
       </div>
 
       <div v-if="isLoading" class="flex justify-center my-4">
