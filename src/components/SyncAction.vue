@@ -102,7 +102,7 @@
     <div class="card-body">
       <h2 class="card-title text-primary">
         <Icon icon="mdi:sync" class="mr-2" />
-        同步操作
+        批量同步操作
       </h2>
 
       <div class="mt-4">
@@ -155,6 +155,7 @@
           <Icon v-else icon="mdi:sync" class="mr-1" />
           {{ isSyncing ? "同步中..." : "开始同步" }}
         </button>
+        <!-- <p class="text-xs opacity-70 py-2">重新同步所有处理过的书籍</p> -->
       </div>
     </div>
   </div>

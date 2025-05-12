@@ -256,19 +256,18 @@ export const wereadService = {
         // 解析JSON数据
         const shelfInfo = JSON.parse(match);
         const bookIds = shelfInfo.shelf.rawIndexes || [];
+
         if (!bookIds || !bookIds.length) return [];
 
         // 分批次获取书籍Id
         const bookIdsChunks = chunkArray(bookIds, 100);
-        
+
         const books: WeReadBook[] = [];
         // 遍历bookIdsChunks
         for (let index = 0; index < bookIdsChunks.length; index++) {
           const bookIdsChunk = bookIdsChunks[index];
           await delay();
-          books.push(
-            ...(await this.getBookshelfSync(bookIdsChunk, cookie))
-          );
+          books.push(...(await this.getBookshelfSync(bookIdsChunk, cookie)));
         }
         return books;
       } catch (error) {
@@ -285,7 +284,6 @@ export const wereadService = {
   ): Promise<WeReadBook[]> {
     return await retry(async () => {
       try {
-
         // 根据bookid获取书籍详情
         const body = {
           bookIds: bookIds.map((item: any) => item.bookId),
@@ -440,6 +438,7 @@ export const wereadService = {
         }
 
         const data = await response.json();
+        console.log(data);
         const rawReviews = data.reviews || [];
 
         if (!rawReviews || !rawReviews.length) return [];
@@ -459,6 +458,7 @@ export const wereadService = {
           reviews.map((review: any) => ({
             bookId,
             chapterUid: review.chapterUid,
+            chapterTitle: review.chapterTitle,
             createTime: review.createTime,
             markText: review.abstract || "",
             content: review.content || "",
@@ -504,13 +504,19 @@ export const wereadService = {
         }
 
         const data = await response.json();
-
+        console.log(data);
+        
         if (!data.updated || !data.updated.length) return [];
-
+        const chapters = data.chapters;
+        const chapterMap: Record<string, any> = {};
+        chapters.forEach((chapter: any) => {
+          chapterMap[chapter.chapterUid] = chapter;
+        });
         // 筛选纯划线（没有笔记内容的标记）
         return data.updated.map((bookmark: any) => ({
           bookId,
           chapterUid: bookmark.chapterUid,
+          chapterTitle:  chapterMap[bookmark.chapterUid].title,
           createTime: bookmark.createTime,
           markText: bookmark.markText,
           bookmarkId: bookmark.bookmarkId,

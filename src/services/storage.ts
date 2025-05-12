@@ -17,7 +17,7 @@ const DEFAULT_SYNC_SETTINGS: SyncSettings = {
 };
 
 // 存储服务
-export const storageService = {  
+export const storageService = {
   // 导出所有存储数据
   async exportAllData(): Promise<object> {
     const data = await browser.storage.local.get(null);
@@ -28,22 +28,26 @@ export const storageService = {
   async importData(data: object): Promise<void> {
     // 获取当前存储的所有数据
     const currentData = await browser.storage.local.get(null);
-    
+
     // 合并数据，处理特殊字段的去重
     const mergedData: Record<string, any> = { ...currentData };
-    
+
     // 遍历导入的数据
     for (const [key, value] of Object.entries(data)) {
       // 特殊处理数组类型的数据，进行去重
       if (Array.isArray(value) && Array.isArray(mergedData[key])) {
         // 对于syncHistory等数组，根据id去重
-        if (key === 'syncHistory') {
-          const existingIds = new Set(mergedData[key].map((item: any) => item.id));
-          const newItems = value.filter((item: any) => !existingIds.has(item.id));
+        if (key === "syncHistory") {
+          const existingIds = new Set(
+            mergedData[key].map((item: any) => item.id)
+          );
+          const newItems = value.filter(
+            (item: any) => !existingIds.has(item.id)
+          );
           mergedData[key] = [...newItems, ...mergedData[key]];
-        } 
+        }
         // 对于syncedBookIds等简单数组，直接去重
-        else if (['syncedBookIds', 'autoSyncBooks'].includes(key)) {
+        else if (["syncedBookIds", "autoSyncBooks"].includes(key)) {
           const uniqueSet = new Set([...mergedData[key], ...value]);
           mergedData[key] = Array.from(uniqueSet);
         }
@@ -51,13 +55,13 @@ export const storageService = {
         else {
           mergedData[key] = value;
         }
-      } 
+      }
       // 非数组类型，直接覆盖
       else {
         mergedData[key] = value;
       }
     }
-    
+
     // 保存合并后的数据
     await browser.storage.local.clear();
     await browser.storage.local.set(mergedData);
@@ -145,7 +149,17 @@ export const storageService = {
   // 删除单条同步历史
   async deleteSyncHistoryItem(historyId: string): Promise<void> {
     const histories = await this.getSyncHistory();
-    const updatedHistories = histories.filter(item => item.id !== historyId);
+    const updatedHistories = histories.filter((item) => item.id !== historyId);
+    const history = histories.find((item) => item.id === historyId);
+    if (!history) return;
+    const bookIds = history.bookIds || [];
+    for (let index = 0; index < bookIds.length; index++) {
+      const bookId = bookIds[index];
+      // 清除已同步书籍ID
+      await this.removeSyncedBookId(bookId);
+      // 清除最后同步时间
+      await browser.storage.local.remove(`book_last_sync_time_${bookId}`);
+    }
     await browser.storage.local.set({ syncHistory: updatedHistories });
   },
 
@@ -165,6 +179,16 @@ export const storageService = {
     const syncedBookIds = await this.getSyncedBookIds();
     if (!syncedBookIds.includes(bookId)) {
       syncedBookIds.push(bookId);
+      await browser.storage.local.set({ syncedBookIds });
+    }
+  },
+
+  // 移除已同步的书籍ID
+  async removeSyncedBookId(bookId: string): Promise<void> {
+    const syncedBookIds = await this.getSyncedBookIds();
+    const index = syncedBookIds.indexOf(bookId);
+    if (index !== -1) {
+      syncedBookIds.splice(index, 1);
       await browser.storage.local.set({ syncedBookIds });
     }
   },
@@ -219,13 +243,13 @@ export const storageService = {
 
   // 获取自动同步的书籍ID列表
   async getAutoSyncBookIds(): Promise<string[]> {
-    const result = await browser.storage.local.get("autoSyncBooks");    
+    const result = await browser.storage.local.get("autoSyncBooks");
     return (result.autoSyncBooks as string[]) || [];
   },
 
   // 保存自动同步的书籍ID
   async saveAutoSyncBookId(bookId: string): Promise<void> {
-    const autoSyncBooks = await this.getAutoSyncBookIds();    
+    const autoSyncBooks = await this.getAutoSyncBookIds();
     if (!autoSyncBooks.includes(bookId)) {
       autoSyncBooks.push(bookId);
       await browser.storage.local.set({ autoSyncBooks: autoSyncBooks });

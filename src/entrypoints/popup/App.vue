@@ -12,14 +12,14 @@
 
   // 标签页
   const tabs = [
-    { id: "sync", label: "同步", icon: "mdi:sync" },
+    { id: "login", label: "登录", icon: "mdi:login" },
     { id: "books", label: "书籍", icon: "mdi:book" },
     { id: "settings", label: "设置", icon: "mdi:cog" },
     { id: "history", label: "历史", icon: "mdi:history" },
     { id: "guide", label: "帮助", icon: "mdi:help-circle" },
   ];
 
-  const activeTab = ref("sync");
+  const activeTab = ref("books");
 
   const setActiveTab = (tabId: string) => {
     activeTab.value = tabId;
@@ -27,7 +27,7 @@
 </script>
 
 <template>
-  <div class="container mx-auto p-4 w-[400px] min-h-[550px]">
+  <div class="container mx-auto p-4 w-[420px] min-h-[550px]">
     <header class="flex items-center justify-between mb-4">
       <h1 class="text-xl font-bold flex items-center gap-2">
         <div class="avatar">
@@ -40,11 +40,10 @@
     </header>
 
     <main>
-      <!-- 同步标签页 -->
-      <div v-if="activeTab === 'sync'">
+      <!-- 登录标签页 -->
+      <div v-if="activeTab === 'login'">
         <div class="flex gap-4 flex-col">
           <WeReadLogin />
-          <SyncAction />
         </div>
       </div>
 
@@ -58,7 +57,10 @@
 
       <!-- 书籍标签页 -->
       <div v-if="activeTab === 'books'">
-        <SyncedBooks />
+        <div class="flex gap-4 flex-col">
+          <!-- <SyncAction /> -->
+          <SyncedBooks />
+        </div>
       </div>
 
       <!-- 历史标签页 -->

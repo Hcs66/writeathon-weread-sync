@@ -48,6 +48,8 @@
       await storageService.clearSyncedBookIds();
       // 重置最后同步时间
       await storageService.resetLastSyncTime();
+      // 清除自动同步的书籍ID列表
+      await storageService.clearAutoSyncBookIds();
       histories.value = [];
       successMessage.value = "同步历史已清除";
     } catch (error) {

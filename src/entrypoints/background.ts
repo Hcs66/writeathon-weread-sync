@@ -10,7 +10,10 @@ const startAutoSync = async () => {
   const syncSettings = await storageService.getSyncSettings();
 
   // 如果未启用自动同步，则不执行
-  if (!syncSettings.autoSync) return;
+  if (!syncSettings.autoSync) {
+    stopAutoSync();
+    return;
+  }
 
   // 清除之前的定时器
   stopAutoSync();

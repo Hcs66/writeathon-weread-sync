@@ -13,7 +13,7 @@
   }
 
   // 标签页
-  const activeTab = ref<"synced" | "bookshelf">("synced");
+  const activeTab = ref<"synced" | "bookshelf">("bookshelf");
 
   // 已同步书籍数据
   const syncedBooks = ref<SyncedBookData[]>([]);
@@ -26,6 +26,8 @@
     isAutoSync: boolean; // 新增
     notesCount?: number;
     bookmarksCount?: number;
+    lastSyncTime?: string;
+    isSelected?: boolean; // 新增：是否被选中
   }
   const bookshelfBooks = ref<BookshelfBookData[]>([]);
   const isBookshelfLoading = ref(true);
@@ -34,6 +36,11 @@
   // 同步状态
   const syncingBookId = ref<string | null>(null);
   const syncResult = ref<{ success: boolean; message: string } | null>(null);
+
+  // 多选相关
+  const selectedBooks = ref<string[]>([]);
+  const isAllSelected = ref(false);
+  const isBatchSyncing = ref(false);
 
   // 分页相关 - 已同步书籍
   const syncedCurrentPage = ref(1);
@@ -127,10 +134,14 @@
       for (const book of books) {
         const isSynced = syncedBookIds.includes(book.bookId);
         const isAutoSync = autoSyncBookIds.includes(book.bookId);
+        const lastSyncTime = await storageService.getBookLastSyncTime(
+          book.bookId
+        );
         const bookData: BookshelfBookData = {
           ...book,
           isSynced,
           isAutoSync,
+          lastSyncTime: new Date(lastSyncTime).toISOString().split("T")[0], // 使用当前日期作为最后同步时间,
         };
 
         booksWithSyncStatus.push(bookData);
@@ -199,13 +210,19 @@
       const result = await syncService.syncSingleBook(bookId, true);
       syncResult.value = result;
 
-      // 如果同步成功，重新加载已同步书籍数据
-      if (
-        result.success &&
-        (result.notesCount > 0 || result.bookmarksCount > 0)
-      ) {
-        await loadBookshelf();
-        loadSyncedBooks();
+      if (result.success) {
+        // 同步成功后开启自动同步
+        await toggleAutoSync({
+          ...result.book!,
+          isSynced: true,
+          isAutoSync: false,
+          notesCount: result.notesCount,
+          bookmarksCount: result.bookmarksCount,
+        });
+        // 如果同步成功，重新加载已同步书籍数据
+        if (result.notesCount > 0 || result.bookmarksCount > 0) {
+          loadBookshelf();
+        }
       }
     } catch (error: any) {
       console.error("增量同步书籍失败:", error);
@@ -216,6 +233,91 @@
     } finally {
       syncingBookId.value = null;
     }
+  };
+
+  // 批量同步选中的书籍
+  const batchSyncSelectedBooks = async () => {
+    if (selectedBooks.value.length === 0) {
+      syncResult.value = {
+        success: false,
+        message: "请先选择要同步的书籍",
+      };
+      return;
+    }
+
+    isBatchSyncing.value = true;
+    syncResult.value = null;
+
+    try {
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const bookId of selectedBooks.value) {
+        try {
+          // 调用同步服务，传入增量同步范围
+          const result = await syncService.syncSingleBook(bookId, true);
+
+          if (result.success) {
+            successCount++;
+          } else {
+            failCount++;
+          }
+        } catch (error) {
+          console.error(`同步书籍 ${bookId} 失败:`, error);
+          failCount++;
+        }
+      }
+
+      // 更新同步结果
+      syncResult.value = {
+        success: successCount > 0,
+        message: `批量同步完成：成功 ${successCount} 本，失败 ${failCount} 本`,
+      };
+
+      // 重新加载书架数据
+      await loadBookshelf();
+
+      // 清空选中状态
+      selectedBooks.value = [];
+      isAllSelected.value = false;
+    } catch (error: any) {
+      console.error("批量同步书籍失败:", error);
+      syncResult.value = {
+        success: false,
+        message: `批量同步失败: ${error.message || "未知错误"}`,
+      };
+    } finally {
+      isBatchSyncing.value = false;
+    }
+  };
+
+  // 选择/取消选择单本书籍
+  const toggleSelectBook = (bookId: string) => {
+    const index = selectedBooks.value.indexOf(bookId);
+    if (index === -1) {
+      selectedBooks.value.push(bookId);
+    } else {
+      selectedBooks.value.splice(index, 1);
+    }
+
+    // 更新全选状态
+    isAllSelected.value =
+      filteredBookshelfBooks.value.length > 0 &&
+      selectedBooks.value.length === filteredBookshelfBooks.value.length;
+  };
+
+  // 全选/取消全选
+  const toggleSelectAll = () => {
+    if (isAllSelected.value) {
+      // 取消全选
+      selectedBooks.value = [];
+    } else {
+      // 全选当前页的书籍
+      selectedBooks.value = paginatedBookshelfBooks.value.map(
+        (book) => book.bookId
+      );
+    }
+    isAllSelected.value = !isAllSelected.value;
   };
 
   // 获取当前页的已同步书籍（添加搜索过滤）
@@ -285,7 +387,7 @@
   };
 
   // 组件挂载时加载已同步书籍数据
-  onMounted(loadSyncedBooks);
+  onMounted(loadBookshelf);
 
   // 计算属性：转换封面图片URL
   const bookCover = computed(() => (cover: string) => {
@@ -303,14 +405,7 @@
   <div class="card bg-base-100 shadow-xl">
     <div class="card-body">
       <!-- 标签页切换 -->
-      <div class="tabs tabs-border">
-        <a
-          class="tab"
-          :class="{ 'tab-active text-primary': activeTab === 'synced' }"
-          @click="switchTab('synced')"
-        >
-          已同步书籍
-        </a>
+      <!-- <div class="tabs tabs-border">
         <a
           class="tab"
           :class="{ 'tab-active text-primary': activeTab === 'bookshelf' }"
@@ -318,7 +413,14 @@
         >
           我的书架
         </a>
-      </div>
+        <a
+          class="tab"
+          :class="{ 'tab-active text-primary': activeTab === 'synced' }"
+          @click="switchTab('synced')"
+        >
+          已同步书籍
+        </a>
+      </div> -->
 
       <!-- 已同步书籍标签页 -->
       <div v-if="activeTab === 'synced'">
@@ -382,6 +484,15 @@
             :key="book.bookId"
             class="card card-side bg-base-200 shadow-md mb-4 border border-neutral/10"
           >
+            <div class="flex items-center ml-2">
+              <input
+                type="checkbox"
+                class="checkbox"
+                :checked="selectedBooks.includes(book.bookId)"
+                @change="toggleSelectBook(book.bookId)"
+                :disabled="syncingBookId === book.bookId || isBatchSyncing"
+              />
+            </div>
             <figure
               class="w-24 min-w-24 h-32 m-2 border border-neutral/10 rounded-md"
             >
@@ -403,7 +514,7 @@
               </h3>
               <p class="text-sm opacity-70">作者: {{ book.author }}</p>
               <div class="text-xs opacity-50" v-if="book.lastSyncTime">
-                最后同步: {{ book.lastSyncTime }}
+                上次同步时间: {{ book.lastSyncTime }}
               </div>
             </div>
           </div>
@@ -451,23 +562,56 @@
           </button>
         </div>
 
-        <!-- 搜索框 -->
-        <div class="form-control mb-4 mt-4">
-          <label class="input">
-            <input
-              type="text"
-              placeholder="搜索书籍标题或作者..."
-              v-model="bookshelfSearchQuery"
-              @input="bookshelfCurrentPage = 1"
-            />
+        <!-- 搜索框和批量操作 -->
+        <div class="flex flex-col md:flex-row gap-4 mb-4 mt-4">
+          <div class="form-control flex-1 w-full">
+            <label class="input w-full">
+              <input
+                type="text"
+                placeholder="搜索书籍标题或作者..."
+                v-model="bookshelfSearchQuery"
+                @input="bookshelfCurrentPage = 1"
+              />
+              <button
+                class="btn btn-sm btn-ghost btn-circle"
+                @click="resetBookshelfSearch"
+                v-if="bookshelfSearchQuery"
+              >
+                <Icon icon="mdi:close" class="text-lg" />
+              </button>
+            </label>
+          </div>
+
+          <!-- 批量操作按钮 -->
+          <div class="flex gap-2 justify-between items-center">
+            <div class="form-control">
+              <label class="label cursor-pointer gap-2 ml-2">
+                <input
+                  type="checkbox"
+                  class="checkbox checkbox-sm checkbox-primary"
+                  :checked="isAllSelected"
+                  @change="toggleSelectAll"
+                  :disabled="
+                    filteredBookshelfBooks.length === 0 || isBatchSyncing
+                  "
+                />
+                <span class="label-text">全选</span>
+              </label>
+            </div>
             <button
-              class="btn btn-sm btn-ghost btn-circle"
-              @click="resetBookshelfSearch"
-              v-if="bookshelfSearchQuery"
+              class="btn btn-primary btn-sm"
+              @click="batchSyncSelectedBooks"
+              :disabled="selectedBooks.length === 0 || isBatchSyncing"
             >
-              <Icon icon="mdi:close" class="text-lg" />
+              <span
+                v-if="isBatchSyncing"
+                class="loading loading-spinner loading-xs"
+              ></span>
+              {{ isBatchSyncing ? "同步中..." : "同步选中" }} ({{
+                selectedBooks.length
+              }})
             </button>
-          </label>
+          </div>
         </div>
 
         <!-- 同步结果提示 -->
@@ -518,8 +662,17 @@
           <div
             v-for="book in paginatedBookshelfBooks"
             :key="book.bookId"
-            class="card card-side bg-base-200 shadow-md mb-4 border border-neutral/10"
+            class="card card-side bg-base-200 shadow-md mb-4 border border-neutral/10 relative"
           >
+            <div class="flex items-center ml-2">
+              <input
+                type="checkbox"
+                class="checkbox checkbox-sm checkbox-primary"
+                :checked="selectedBooks.includes(book.bookId)"
+                @change="toggleSelectBook(book.bookId)"
+                :disabled="syncingBookId === book.bookId || isBatchSyncing"
+              />
+            </div>
             <figure
               class="w-24 min-w-24 h-32 m-2 border border-neutral/10 rounded-md"
             >
@@ -562,24 +715,12 @@
                     }}
                   </button>
                 </div>
-                <div class="flex items-center justify-end" v-if="book.isSynced">
-                  <span class="text-sm mr-2">自动同步</span>
-                  <input
-                    type="checkbox"
-                    class="toggle toggle-primary toggle-sm"
-                    :checked="book.isAutoSync"
-                    @change="toggleAutoSync(book)"
-                  />
-                </div>
               </div>
-              <div class="flex justify-end">
-                <div
-                  v-if="book.isSynced"
-                  class="badge badge-success badge-sm text-white flex gap-1"
-                >
-                  <Icon icon="mdi:check-circle" />
-                  已同步
-                </div>
+              <div
+                class="text-xs opacity-50"
+                v-if="book.isSynced && book.lastSyncTime"
+              >
+                最后同步: {{ book.lastSyncTime }}
               </div>
             </div>
           </div>

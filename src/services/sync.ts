@@ -38,6 +38,7 @@ export const syncService = {
     message: string;
     notesCount: number;
     bookmarksCount: number;
+    book?: WeReadBook;
   }> {
     try {
       // 获取设置
@@ -56,8 +57,12 @@ export const syncService = {
       }
 
       if (!wereadCookie) {
-        return { success: false, message: "请先登录微信读书",           notesCount: 0,
-          bookmarksCount: 0, };
+        return {
+          success: false,
+          message: "请先登录微信读书",
+          notesCount: 0,
+          bookmarksCount: 0,
+        };
       }
 
       // 验证Writeathon凭证
@@ -79,8 +84,12 @@ export const syncService = {
         bookId
       );
       if (!book) {
-        return { success: false, message: "获取书籍详情失败",           notesCount: 0,
-          bookmarksCount: 0, };
+        return {
+          success: false,
+          message: "获取书籍详情失败",
+          notesCount: 0,
+          bookmarksCount: 0,
+        };
       }
 
       // 获取书籍的笔记和划线
@@ -96,6 +105,7 @@ export const syncService = {
         wereadCookie.value,
         bookId
       );
+      
 
       if (isIncremental) {
         // 增量同步：获取当前书籍的上次同步时间后的笔记和划线
@@ -129,8 +139,13 @@ export const syncService = {
       }
 
       if (notes.length === 0 && bookmarks.length === 0) {
-        return { success: true, message: "该书籍没有笔记和划线",           notesCount: 0,
-          bookmarksCount: 0, };
+        return {
+          success: true,
+          message: "该书籍没有需要同步的笔记和划线",
+          notesCount: 0,
+          bookmarksCount: 0,
+          book,
+        };
       }
 
       // 同步历史记录
@@ -141,6 +156,7 @@ export const syncService = {
         bookmarksCount: bookmarks.length,
         success: true,
         message: "",
+        bookIds: [book.bookId],
       };
 
       // 同步笔记和划线
@@ -173,6 +189,7 @@ export const syncService = {
         message: syncHistory.message,
         notesCount: notes.length,
         bookmarksCount: bookmarks.length,
+        book,
       };
     } catch (error: any) {
       console.error("同步单本书籍失败:", error);
@@ -229,7 +246,7 @@ export const syncService = {
       const autoSyncBookIds = await storageService.getAutoSyncBookIds();
 
       if (autoSyncBookIds.length === 0) {
-        return { success: false, message: "没有设置自动同步的书籍" };
+        return { success: false, message: "请先手动同步书架上的书籍" };
       }
 
       // 获取书架中的所有书籍
@@ -255,11 +272,11 @@ export const syncService = {
 
       let totalNotes = 0;
       let totalBookmarks = 0;
-
+      let bookIds: string[] = [];
       // 逐本同步书籍
       for (let i = 0; i < booksToSync.length; i++) {
         const book = booksToSync[i];
-
+        bookIds.push(book.bookId);
         // 更新同步进度
         updateSyncProgress({
           currentBook: i + 1,
@@ -298,6 +315,7 @@ export const syncService = {
         bookmarksCount: totalBookmarks,
         message: `自动同步了 ${booksToSync.length} 本书籍`,
         success: true,
+        bookIds,
       });
 
       return {

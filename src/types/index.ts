@@ -10,6 +10,7 @@ export interface WeReadBook {
 export interface WeReadNote {
   bookId: string;
   chapterUid: number;
+  chapterTitle: string;
   createTime: number;
   markText: string;
   content: string;
@@ -19,6 +20,7 @@ export interface WeReadNote {
 export interface WeReadBookmark {
   bookId: string;
   chapterUid: number;
+  chapterTitle: string;
   createTime: number;
   markText: string;
   bookmarkId: string;
@@ -33,7 +35,7 @@ export interface WriteathonSettings {
 
 // 同步设置
 export interface SyncSettings {
-  syncRange: "last1days" |'last7days' | 'last14days' | 'last30days' | 'all';
+  syncRange: "last1days" | "last7days" | "last14days" | "last30days" | "all";
   syncInterval: number; // 分钟
   mergeNotes: boolean; // 是否合并笔记
   autoSync: boolean; // 是否自动同步
@@ -49,6 +51,7 @@ export interface SyncHistory {
   bookmarksCount: number;
   success: boolean;
   message: string;
+  bookIds: string[]; // 同步的书籍ID列表
 }
 
 // 同步进度
