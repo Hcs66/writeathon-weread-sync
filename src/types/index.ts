@@ -41,6 +41,7 @@ export interface SyncSettings {
   autoSync: boolean; // 是否自动同步
   lastSyncTime?: number; // 上次同步时间（毫秒时间戳）
   requestDelay: number; // 请求延迟时间（毫秒）
+  bookshelfLimit: number; // 默认同步书架数量
 }
 
 // 同步历史

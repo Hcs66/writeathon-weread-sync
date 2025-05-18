@@ -4,13 +4,27 @@
   import { storageService } from "@/services/storage";
   import { wereadService } from "@/services/weread";
   import { syncService } from "@/services/sync";
-  import { WeReadBook, WeReadNote, WeReadBookmark } from "@/types";
+  import {
+    WeReadBook,
+    WeReadNote,
+    WeReadBookmark,
+    SyncSettings,
+  } from "@/types";
 
   interface SyncedBookData extends WeReadBook {
     notesCount: number;
     bookmarksCount: number;
     lastSyncTime?: string;
   }
+
+  const settings = ref<SyncSettings>({
+    syncRange: "all",
+    syncInterval: 15,
+    mergeNotes: false,
+    autoSync: false,
+    requestDelay: 100,
+    bookshelfLimit: 50,
+  });
 
   // 标签页
   const activeTab = ref<"synced" | "bookshelf">("bookshelf");
@@ -32,6 +46,14 @@
   const bookshelfBooks = ref<BookshelfBookData[]>([]);
   const isBookshelfLoading = ref(true);
   const bookshelfErrorMessage = ref("");
+  const bookshelfLimit = ref(50);
+
+  const bookshelfLimitOptions = [
+    { value: 50, label: "最近 50 本" },
+    { value: 100, label: "最近 100 本" },
+    { value: 500, label: "最近 500 本" },
+    { value: 1000, label: "最近 1000 本" },
+  ];
 
   // 同步状态
   const syncingBookId = ref<string | null>(null);
@@ -126,7 +148,10 @@
       const autoSyncBookIds = await storageService.getAutoSyncBookIds();
 
       // 获取书架数据
-      const books = await wereadService.getBookshelf(wereadCookie.value);
+      const books = await wereadService.getBookshelf(
+        wereadCookie.value,
+        bookshelfLimit.value
+      );
 
       // 为每本书添加同步状态
       const booksWithSyncStatus: BookshelfBookData[] = [];
@@ -386,8 +411,15 @@
     }
   };
 
+  const init = async () => {
+    const savedSettings = await storageService.getSyncSettings();
+    settings.value = savedSettings;
+    bookshelfLimit.value = savedSettings.bookshelfLimit;
+    loadBookshelf();
+  };
+
   // 组件挂载时加载已同步书籍数据
-  onMounted(loadBookshelf);
+  onMounted(init);
 
   // 计算属性：转换封面图片URL
   const bookCover = computed(() => (cover: string) => {
@@ -399,6 +431,17 @@
     }
     return cover.slice(0, index) + "t6" + cover.slice(index + 1);
   });
+
+  const changeBookshelfLimit = (e: any) => {
+    // 保存设置
+    storageService.saveSyncSettings({
+      ...settings.value,
+      bookshelfLimit: bookshelfLimit.value,
+    });
+    bookshelfCurrentPage.value = 1;
+    // 加载书架数据
+    loadBookshelf();
+  };
 </script>
 
 <template>
@@ -557,9 +600,24 @@
       <div v-if="activeTab === 'bookshelf'">
         <div class="flex justify-between mb-2">
           <h2 class="card-title">我的书架</h2>
-          <button class="btn btn-sm btn-circle" @click="loadBookshelf">
-            <Icon icon="mdi:refresh" class="text-lg" />
-          </button>
+          <div class="flex gap-2">
+            <select
+              @change="changeBookshelfLimit"
+              v-model="bookshelfLimit"
+              class="select select-sm select-ghost"
+            >
+              <option
+                :selected="item.value == bookshelfLimit"
+                :value="item.value"
+                v-for="item in bookshelfLimitOptions"
+              >
+                {{ item.label }}
+              </option>
+            </select>
+            <button class="btn btn-sm btn-circle" @click="loadBookshelf">
+              <Icon icon="mdi:refresh" class="text-lg" />
+            </button>
+          </div>
         </div>
 
         <!-- 搜索框和批量操作 -->

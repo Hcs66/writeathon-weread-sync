@@ -14,6 +14,7 @@ const DEFAULT_SYNC_SETTINGS: SyncSettings = {
   autoSync: false,
   lastSyncTime: 0, // 初始值为0，表示从未同步过
   requestDelay: 100, // 默认100毫秒（100ms）
+  bookshelfLimit: 50, // 默认50本
 };
 
 // 存储服务

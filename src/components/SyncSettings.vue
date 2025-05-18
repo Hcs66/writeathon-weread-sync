@@ -10,6 +10,7 @@
     mergeNotes: false,
     autoSync: false,
     requestDelay: 100,
+    bookshelfLimit: 50,
   });
 
   const isLoading = ref(false);

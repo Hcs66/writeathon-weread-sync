@@ -225,7 +225,7 @@ export const wereadService = {
   },
 
   // 获取我的书架
-  async getBookshelf(cookie: string): Promise<WeReadBook[]> {
+  async getBookshelf(cookie: string, limit = 50): Promise<WeReadBook[]> {
     return await retry(async () => {
       try {
         await this.visitWeRead(cookie);
@@ -255,12 +255,16 @@ export const wereadService = {
 
         // 解析JSON数据
         const shelfInfo = JSON.parse(match);
+        console.log(shelfInfo);
+
         const bookIds = shelfInfo.shelf.rawIndexes || [];
 
         if (!bookIds || !bookIds.length) return [];
+        
+        const bookIdsChunk = bookIds.slice(0, limit);
 
         // 分批次获取书籍Id
-        const bookIdsChunks = chunkArray(bookIds, 100);
+        const bookIdsChunks = chunkArray(bookIdsChunk, 100);
 
         const books: WeReadBook[] = [];
         // 遍历bookIdsChunks
@@ -438,7 +442,7 @@ export const wereadService = {
         }
 
         const data = await response.json();
-        console.log(data);
+
         const rawReviews = data.reviews || [];
 
         if (!rawReviews || !rawReviews.length) return [];
@@ -504,8 +508,7 @@ export const wereadService = {
         }
 
         const data = await response.json();
-        console.log(data);
-        
+
         if (!data.updated || !data.updated.length) return [];
         const chapters = data.chapters;
         const chapterMap: Record<string, any> = {};
@@ -516,7 +519,7 @@ export const wereadService = {
         return data.updated.map((bookmark: any) => ({
           bookId,
           chapterUid: bookmark.chapterUid,
-          chapterTitle:  chapterMap[bookmark.chapterUid].title,
+          chapterTitle: chapterMap[bookmark.chapterUid].title,
           createTime: bookmark.createTime,
           markText: bookmark.markText,
           bookmarkId: bookmark.bookmarkId,
