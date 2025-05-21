@@ -153,6 +153,14 @@ export const wereadService = {
       : `https://weread.qq.com/web/reader/${this.calculateBookStrId(bookId)}`;
   },
 
+  // 获取公众号原文链接
+  getMpUrl(refMpReviewId: string): string {    
+    const ids = refMpReviewId.split("_");
+    return ids.length !== 4
+      ? `https://weread.qq.com/web/shelf`
+      : `https://mp.weixin.qq.com/s/${ids[3]}`;
+  },
+
   // 访问微信读书首页
   async visitWeRead(cookie: string) {
     await fetch(`${WEREAD_URL}`, {
@@ -255,12 +263,11 @@ export const wereadService = {
 
         // 解析JSON数据
         const shelfInfo = JSON.parse(match);
-        console.log(shelfInfo);
 
         const bookIds = shelfInfo.shelf.rawIndexes || [];
 
         if (!bookIds || !bookIds.length) return [];
-        
+
         const bookIdsChunk = bookIds.slice(0, limit);
 
         // 分批次获取书籍Id
@@ -454,6 +461,14 @@ export const wereadService = {
             if (review.type === 4) {
               return { chapterUid: 1000000, ...review };
             }
+            if (review.refMpInfo) {
+              return {
+                refMpReviewId: review.refMpInfo.reviewId,
+                refMpReviewTitle: review.refMpInfo.title,
+                createTime: review.refMpInfo.createTime,
+                ...review,
+              };
+            }
             return review;
           });
 
@@ -467,6 +482,8 @@ export const wereadService = {
             markText: review.abstract || "",
             content: review.content || "",
             noteId: review.reviewId,
+            refMpReviewId: review.refMpReviewId,
+            refMpReviewTitle: review.refMpReviewTitle,
           })) || []
         );
       } catch (error) {
@@ -510,20 +527,39 @@ export const wereadService = {
         const data = await response.json();
 
         if (!data.updated || !data.updated.length) return [];
-        const chapters = data.chapters;
-        const chapterMap: Record<string, any> = {};
-        chapters.forEach((chapter: any) => {
-          chapterMap[chapter.chapterUid] = chapter;
-        });
-        // 筛选纯划线（没有笔记内容的标记）
-        return data.updated.map((bookmark: any) => ({
-          bookId,
-          chapterUid: bookmark.chapterUid,
-          chapterTitle: chapterMap[bookmark.chapterUid].title,
-          createTime: bookmark.createTime,
-          markText: bookmark.markText,
-          bookmarkId: bookmark.bookmarkId,
-        }));
+        // 普通书籍
+        if (data.chapters && data.chapters.length) {
+          const chapters = data.chapters;
+          const chapterMap: Record<string, any> = {};
+          chapters.forEach((chapter: any) => {
+            chapterMap[chapter.chapterUid] = chapter;
+          });
+          // 筛选纯划线（没有笔记内容的标记）
+          return data.updated.map((bookmark: any) => ({
+            bookId,
+            chapterUid: bookmark.chapterUid,
+            chapterTitle: chapterMap[bookmark.chapterUid].title,
+            createTime: bookmark.createTime,
+            markText: bookmark.markText,
+            bookmarkId: bookmark.bookmarkId,
+          }));
+        }
+        // 公众号
+        else if (data.refMpInfos && data.refMpInfos.length) {
+          const mpInfos = data.refMpInfos;
+          const mpInfoMap: Record<string, any> = {};
+          mpInfos.forEach((mpInfo: any) => {
+            mpInfoMap[mpInfo.reviewId] = mpInfo;
+          });
+          // 筛选纯划线（没有笔记内容的标记）
+          return data.updated.map((bookmark: any) => ({
+            bookId,
+            createTime: bookmark.createTime,
+            markText: bookmark.markText,
+            refMpReviewId: bookmark.refMpReviewId,
+            refMpReviewTitle: mpInfoMap[bookmark.refMpReviewId].title,
+          }));
+        }
       } catch (error) {
         console.error("获取微信读书划线列表失败:", error);
         throw error;

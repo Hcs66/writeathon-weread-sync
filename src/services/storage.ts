@@ -67,6 +67,7 @@ export const storageService = {
     await browser.storage.local.clear();
     await browser.storage.local.set(mergedData);
   },
+  
   // 获取Writeathon设置
   async getWriteathonSettings(): Promise<WriteathonSettings> {
     const result = await browser.storage.local.get("writeathonSettings");

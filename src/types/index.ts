@@ -15,6 +15,8 @@ export interface WeReadNote {
   markText: string;
   content: string;
   noteId: string;
+  refMpReviewId: string;
+  refMpReviewTitle: string;
 }
 
 export interface WeReadBookmark {
@@ -24,6 +26,8 @@ export interface WeReadBookmark {
   createTime: number;
   markText: string;
   bookmarkId: string;
+  refMpReviewId: string;
+  refMpReviewTitle: string;
 }
 
 // Writeathon相关类型

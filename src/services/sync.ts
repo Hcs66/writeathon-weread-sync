@@ -101,6 +101,7 @@ export const syncService = {
         wereadCookie.value,
         bookId
       );
+      
       const allBookmarks = await wereadService.getBookmarks(
         wereadCookie.value,
         bookId
@@ -476,7 +477,14 @@ export const syncService = {
       notes.forEach((note) => {
         content += `> ${this.filterContent(
           note.markText
-        )}\n\n${this.filterContent(note.content)}\n\n---\n\n`;
+        )}\n\n${this.filterContent(note.content)}\n\n`;
+
+        // 添加公众号原文链接
+        if(note.refMpReviewId && note.refMpReviewTitle) {
+          content += `公众号原文: [${note.refMpReviewTitle}](${wereadService.getMpUrl(note.refMpReviewId)})\n\n`;
+        }
+
+        content += `---\n\n`;
       });
     }
 
@@ -484,7 +492,14 @@ export const syncService = {
     if (bookmarks.length > 0) {
       content += `### 划线\n\n`;
       bookmarks.forEach((bookmark) => {
-        content += `> ${this.filterContent(bookmark.markText)}\n\n---\n\n`;
+        content += `> ${this.filterContent(bookmark.markText)}\n\n`;
+
+        // 添加公众号原文链接
+        if(bookmark.refMpReviewId && bookmark.refMpReviewTitle) {
+          content += `公众号原文: [${bookmark.refMpReviewTitle}](${wereadService.getMpUrl(bookmark.refMpReviewId)})\n\n`;
+        } 
+
+        content += `---\n\n`;
       });
     }
 
@@ -519,6 +534,11 @@ export const syncService = {
         note.markText
       )}\n\n${this.filterContent(note.content)}\n\n`;
 
+      // 添加公众号原文链接
+      if(note.refMpReviewId && note.refMpReviewTitle) {
+        content += `公众号原文: [${note.refMpReviewTitle}](${wereadService.getMpUrl(note.refMpReviewId)})\n\n`;
+      }
+
       await writeathonService.createCard(writeathonSettings, title, content);
     }
 
@@ -535,6 +555,11 @@ export const syncService = {
       content += `[微信读书](${wereadService.getUrl(book.bookId)})\n\n`;
 
       content += `> ${this.filterContent(bookmark.markText)}\n\n`;
+
+      // 添加公众号原文链接
+      if(bookmark.refMpReviewId && bookmark.refMpReviewTitle) {
+        content += `公众号原文: [${bookmark.refMpReviewTitle}](${wereadService.getMpUrl(bookmark.refMpReviewId)})\n\n`;
+      }
 
       await writeathonService.createCard(writeathonSettings, title, content);
     }

@@ -414,7 +414,7 @@
   const init = async () => {
     const savedSettings = await storageService.getSyncSettings();
     settings.value = savedSettings;
-    bookshelfLimit.value = savedSettings.bookshelfLimit;
+    bookshelfLimit.value = savedSettings.bookshelfLimit || 50;
     loadBookshelf();
   };
 
@@ -626,7 +626,11 @@
             <label class="input w-full">
               <input
                 type="text"
-                placeholder="搜索书籍标题或作者..."
+                :placeholder="
+                  '搜索最近 ' +
+                  bookshelfLimit.toString() +
+                  ' 本书籍标题或作者...'
+                "
                 v-model="bookshelfSearchQuery"
                 @input="bookshelfCurrentPage = 1"
               />
